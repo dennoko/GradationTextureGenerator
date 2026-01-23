@@ -183,7 +183,7 @@ namespace GradationTextureGenerator.UI
 
             // Handle
             EditorGUI.BeginChangeCheck();
-            _sceneHandle.DrawHandle(center, _settings);
+            _sceneHandle.DrawHandle(center, _settings, _settings.TargetRenderer.transform);
             if (EditorGUI.EndChangeCheck())
             {
                 // If handle changed direction, update range
