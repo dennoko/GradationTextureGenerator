@@ -18,6 +18,10 @@ namespace GradationTextureGenerator.Data
         public float MinRange = 0f;
         public float MaxRange = 1f;
 
+        // Preview Settings
+        public bool IsToolActive = true;
+        public float PreviewOpacity = 0.5f;
+
         public string SavePath = "Assets/";
     }
 }

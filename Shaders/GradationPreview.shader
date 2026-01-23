@@ -12,8 +12,8 @@ Shader "Hidden/GradationTextureGenerator/Preview"
         
         // Non-destructive overlay settings
         ZWrite Off
-        ZTest LEqual // Draw only if not occluded (or Always if user prefers seeing through)
-        Blend SrcAlpha OneMinusSrcAlpha // Alpha Blending
+        ZTest LEqual
+        Blend SrcAlpha OneMinusSrcAlpha
         
         Pass
         {

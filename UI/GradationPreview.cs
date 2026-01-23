@@ -12,6 +12,7 @@ namespace GradationTextureGenerator.UI
 
         public void UpdatePreview(GradationSettings settings, Mesh mesh, Matrix4x4 localToWorld)
         {
+            if (Event.current.type != EventType.Repaint) return;
             if (mesh == null) return;
             
             // Lazy Init Material
@@ -33,8 +34,8 @@ namespace GradationTextureGenerator.UI
             _previewMaterial.SetVector("_Direction", settings.GradientDirection.normalized);
             _previewMaterial.SetFloat("_RangeMin", settings.MinRange);
             _previewMaterial.SetFloat("_RangeMax", settings.MaxRange);
-            _previewMaterial.SetFloat("_Opacity", 0.7f); // Fixed opacity for now
-            
+            _previewMaterial.SetFloat("_Opacity", settings.PreviewOpacity);
+
             // Draw via Graphics
             // DrawMesh draws immediately for the current camera.
             // But usually this is called inside OnSceneGUI which is a Repaint event.

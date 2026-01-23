@@ -34,6 +34,19 @@ namespace GradationTextureGenerator.UI
 
         private void OnGUI()
         {
+            // Master Toggle in Toolbar style
+            EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
+            _settings.IsToolActive = EditorGUILayout.ToggleLeft("Enable Tool", _settings.IsToolActive, GUILayout.Width(120));
+            // Force repaint scene view when toggled to show/hide handles immediately
+            if (GUI.changed) SceneView.RepaintAll();
+            EditorGUILayout.EndHorizontal();
+
+            if (!_settings.IsToolActive)
+            {
+                EditorGUILayout.HelpBox("Tool is disabled. Enable to edit.", MessageType.Info);
+                return;
+            }
+
             GUILayout.Label("Settings", EditorStyles.boldLabel);
             
             EditorGUI.BeginChangeCheck();
@@ -114,6 +127,15 @@ namespace GradationTextureGenerator.UI
 
             EditorGUILayout.Space();
             _previewEnabled = EditorGUILayout.Toggle("Realtime Preview", _previewEnabled);
+            
+            if (_previewEnabled)
+            {
+                EditorGUI.indentLevel++;
+                _settings.PreviewOpacity = EditorGUILayout.Slider("Opacity", _settings.PreviewOpacity, 0f, 1f);
+                EditorGUI.indentLevel--;
+                
+                if (GUI.changed) SceneView.RepaintAll();
+            }
 
             EditorGUILayout.BeginHorizontal();
             _settings.SavePath = EditorGUILayout.TextField("Save Path", _settings.SavePath);
@@ -143,10 +165,21 @@ namespace GradationTextureGenerator.UI
 
         private void OnSceneGUI(SceneView sceneView)
         {
+            if (!_settings.IsToolActive) return;
             if (_settings.TargetRenderer == null) return;
             
             Bounds bounds = _settings.TargetRenderer.bounds;
             Vector3 center = bounds.center;
+
+            // Preview
+            if (_previewEnabled)
+            {
+                Mesh mesh = GetMesh(_settings.TargetRenderer);
+                if (mesh != null)
+                {
+                    _preview.UpdatePreview(_settings, mesh, _settings.TargetRenderer.localToWorldMatrix);
+                }
+            }
 
             // Handle
             EditorGUI.BeginChangeCheck();
@@ -165,16 +198,6 @@ namespace GradationTextureGenerator.UI
                      }
                 }
                 Repaint(); // Repaint Window
-            }
-
-            // Preview
-            if (_previewEnabled)
-            {
-                Mesh mesh = GetMesh(_settings.TargetRenderer);
-                if (mesh != null)
-                {
-                    _preview.UpdatePreview(_settings, mesh, _settings.TargetRenderer.localToWorldMatrix);
-                }
             }
         }
 
