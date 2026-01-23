@@ -11,6 +11,8 @@ namespace GradationTextureGenerator.UI
         private GradationSettings _settings = new GradationSettings();
         private GradationBaker _baker = new GradationBaker();
         private GradationSceneHandle _sceneHandle = new GradationSceneHandle();
+        private GradationPreview _preview = new GradationPreview();
+        private bool _previewEnabled = true; // Default ON
         
         [MenuItem("Tools/Gradation Texture Generator")]
         public static void ShowWindow()
@@ -26,6 +28,8 @@ namespace GradationTextureGenerator.UI
         private void OnDisable()
         {
             SceneView.duringSceneGui -= OnSceneGUI;
+            _sceneHandle.Cleanup();
+            _preview.Cleanup();
         }
 
         private void OnGUI()
@@ -40,9 +44,20 @@ namespace GradationTextureGenerator.UI
                 if (newRenderer != null)
                 {
                     _settings.Resolution = TextureResolutionResolver.ResolveDefaultResolution(newRenderer);
+                    // Also auto-calculate range on assign if auto-normalize is ON
+                    if (_settings.AutoNormalize)
+                    {
+                         Mesh mesh = GetMesh(newRenderer);
+                         if (mesh != null)
+                         {
+                             MeshReadWriteEnabler.EnsureReadWriteEnabled(mesh);
+                            (_settings.MinRange, _settings.MaxRange) = _baker.CalculateNormalizeRange(mesh, _settings.GradientDirection);
+                         }
+                    }
                 }
             }
 
+            EditorGUI.BeginChangeCheck();
             _settings.GradientDirection = EditorGUILayout.Vector3Field("Direction", _settings.GradientDirection);
             _settings.Gradient = EditorGUILayout.GradientField("Gradient", _settings.Gradient);
 
@@ -64,14 +79,16 @@ namespace GradationTextureGenerator.UI
             }
             else
             {
-                if (GUILayout.Button("Calculate Range Preview"))
+                // If AutoNormalize is ON, we might want to refresh calculation when direction changes?
+                // Or just show button "Refresh Range". 
+                // Actually, if Auto is ON, we should probably update it every frame or on change.
+                if (GUILayout.Button("Recalculate Range"))
                 {
-                    if (_settings.TargetRenderer != null)
+                     if (_settings.TargetRenderer != null)
                     {
                          Mesh mesh = GetMesh(_settings.TargetRenderer);
                          if (mesh != null)
                          {
-                             // Ensure accessible
                              MeshReadWriteEnabler.EnsureReadWriteEnabled(mesh);
                             (_settings.MinRange, _settings.MaxRange) = _baker.CalculateNormalizeRange(mesh, _settings.GradientDirection);
                          }
@@ -79,6 +96,24 @@ namespace GradationTextureGenerator.UI
                 }
                 EditorGUILayout.HelpBox($"Current Range: {_settings.MinRange:F2} - {_settings.MaxRange:F2}", MessageType.Info);
             }
+            
+            if (EditorGUI.EndChangeCheck())
+            {
+                // Auto-update range if needed when params change
+                if (_settings.AutoNormalize && _settings.TargetRenderer != null)
+                {
+                     Mesh mesh = GetMesh(_settings.TargetRenderer);
+                     if (mesh != null)
+                     {
+                        MeshReadWriteEnabler.EnsureReadWriteEnabled(mesh);
+                        (_settings.MinRange, _settings.MaxRange) = _baker.CalculateNormalizeRange(mesh, _settings.GradientDirection);
+                     }
+                }
+                SceneView.RepaintAll();
+            }
+
+            EditorGUILayout.Space();
+            _previewEnabled = EditorGUILayout.Toggle("Realtime Preview", _previewEnabled);
 
             EditorGUILayout.BeginHorizontal();
             _settings.SavePath = EditorGUILayout.TextField("Save Path", _settings.SavePath);
@@ -113,11 +148,33 @@ namespace GradationTextureGenerator.UI
             Bounds bounds = _settings.TargetRenderer.bounds;
             Vector3 center = bounds.center;
 
-            _sceneHandle.DrawHandle(center, ref _settings.GradientDirection);
-            
-            if (GUI.changed)
+            // Handle
+            EditorGUI.BeginChangeCheck();
+            _sceneHandle.DrawHandle(center, _settings);
+            if (EditorGUI.EndChangeCheck())
             {
-                Repaint();
+                // If handle changed direction, update range
+                if (_settings.AutoNormalize)
+                {
+                     Mesh mesh = GetMesh(_settings.TargetRenderer);
+                     if (mesh != null)
+                     {
+                        // Ensure readable
+                        MeshReadWriteEnabler.EnsureReadWriteEnabled(mesh);
+                        (_settings.MinRange, _settings.MaxRange) = _baker.CalculateNormalizeRange(mesh, _settings.GradientDirection);
+                     }
+                }
+                Repaint(); // Repaint Window
+            }
+
+            // Preview
+            if (_previewEnabled)
+            {
+                Mesh mesh = GetMesh(_settings.TargetRenderer);
+                if (mesh != null)
+                {
+                    _preview.UpdatePreview(_settings, mesh, _settings.TargetRenderer.localToWorldMatrix);
+                }
             }
         }
 
