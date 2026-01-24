@@ -96,39 +96,35 @@ namespace GradationTextureGenerator.UI
             {
                 EditorGUI.indentLevel++;
                 
-                EditorGUI.BeginChangeCheck();
-                
-                // Auto Normalize toggle
-                _settings.AutoNormalize = EditorGUILayout.Toggle("Auto Fit to Mesh", _settings.AutoNormalize);
-                
-                if (_settings.AutoNormalize)
+                // Fit to Mesh button - always available
+                if (GUILayout.Button("Fit to Mesh Bounds"))
                 {
-                    EditorGUILayout.HelpBox("Box will automatically fit to mesh bounds. Use the rotation handle in Scene View to change direction.", MessageType.Info);
-                    
-                    if (GUILayout.Button("Reset Box to Mesh Bounds"))
+                    Mesh mesh = GetMesh(_settings.TargetRenderer);
+                    if (mesh != null)
                     {
-                        Mesh mesh = GetMesh(_settings.TargetRenderer);
-                        if (mesh != null)
-                        {
-                            MeshReadWriteEnabler.EnsureReadWriteEnabled(mesh);
-                            _settings.FitToMeshBounds(mesh, _settings.TargetRenderer.transform);
-                            SceneView.RepaintAll();
-                        }
+                        MeshReadWriteEnabler.EnsureReadWriteEnabled(mesh);
+                        _settings.FitToMeshBounds(mesh, _settings.TargetRenderer.transform);
+                        SceneView.RepaintAll();
                     }
                 }
-                else
-                {
-                    // Manual box control
-                    _settings.BoxCenter = EditorGUILayout.Vector3Field("Center", _settings.BoxCenter);
-                    
-                    // Rotation as Euler for easier editing
-                    Vector3 euler = _settings.BoxRotation.eulerAngles;
-                    euler = EditorGUILayout.Vector3Field("Rotation", euler);
-                    _settings.BoxRotation = Quaternion.Euler(euler);
-                    
-                    _settings.BoxHeight = EditorGUILayout.FloatField("Height", _settings.BoxHeight);
-                    _settings.BoxHeight = Mathf.Max(0.01f, _settings.BoxHeight);
-                }
+                
+                EditorGUILayout.Space(3);
+                EditorGUILayout.HelpBox("Use Scene View handles to adjust the gradation box:\n• Rotation: Change gradient direction\n• Position: Move the box\n• Red/Green cones: Adjust min/max range", MessageType.Info);
+                
+                EditorGUILayout.Space(3);
+                
+                // Manual box control - always visible
+                EditorGUI.BeginChangeCheck();
+                
+                _settings.BoxCenter = EditorGUILayout.Vector3Field("Center", _settings.BoxCenter);
+                
+                // Rotation as Euler for easier editing
+                Vector3 euler = _settings.BoxRotation.eulerAngles;
+                euler = EditorGUILayout.Vector3Field("Rotation", euler);
+                _settings.BoxRotation = Quaternion.Euler(euler);
+                
+                _settings.BoxHeight = EditorGUILayout.FloatField("Height", _settings.BoxHeight);
+                _settings.BoxHeight = Mathf.Max(0.01f, _settings.BoxHeight);
                 
                 if (EditorGUI.EndChangeCheck())
                 {
@@ -228,13 +224,8 @@ namespace GradationTextureGenerator.UI
             
             if (changeType != HandleChangeType.None)
             {
-                // Only refit to bounds when ROTATION changes and AutoNormalize is on
-                // Do NOT refit when position or height changes (user is manually adjusting)
-                if (_settings.AutoNormalize && (changeType & HandleChangeType.Rotation) != 0)
-                {
-                    MeshReadWriteEnabler.EnsureReadWriteEnabled(mesh);
-                    _settings.FitToMeshBounds(mesh, _settings.TargetRenderer.transform);
-                }
+                // Just repaint the window to reflect changes
+                // FitToMeshBounds is only called on initialization or via button
                 Repaint();
             }
         }

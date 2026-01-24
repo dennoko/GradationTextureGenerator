@@ -21,9 +21,6 @@ namespace GradationTextureGenerator.Data
         public const float BoxWidth = 0.5f;
         public const float BoxDepth = 0.5f;
 
-        // AutoNormalize - fits the box to mesh bounds
-        public bool AutoNormalize = true;
-
         // Computed properties for shader compatibility
         public Vector3 GradientDirection => BoxRotation * Vector3.up;
         

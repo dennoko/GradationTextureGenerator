@@ -1,12 +1,12 @@
-﻿[2026-01-24 02:11:25] [GradationBakerWindow] Bake & Save button clicked.
-[2026-01-24 02:11:25] [GradationBaker] Starting Bake...
-[2026-01-24 02:11:25] [GradationBaker] Target Mesh: ModsCoat, Vertex Count: 8588
-[2026-01-24 02:11:25] [GradationBaker] Shader found: Hidden/GradationTextureGenerator/Bake
-[2026-01-24 02:11:25] [GradationBaker] AutoNormalize Range: 0.6084468 to 1.576606
-[2026-01-24 02:11:25] [GradationBaker] Resolution: 2048
-[2026-01-24 02:11:25] [GradationBaker] Drawing Mesh Now...
-[2026-01-24 02:11:25] [GradationBaker] ReadPixels finished.
-[2026-01-24 02:11:25] [GradationBakerWindow] SavePath setting: Assets/test/texture
-[2026-01-24 02:11:25] [GradationBakerWindow] Full Directory Path: C:/Users/dennoko/AppData/Local/VRChatCreatorCompanion/VRChatProjects/Unity_extension_development/Assets/test/texture
-[2026-01-24 02:11:25] [GradationBakerWindow] Writing file to: C:/Users/dennoko/AppData/Local/VRChatCreatorCompanion/VRChatProjects/Unity_extension_development/Assets/test/texture/Gradation_ModsCoat [WorkCopy]_20260124021125.png
-[2026-01-24 02:11:25] [GradationTextureGenerator] Saved to C:/Users/dennoko/AppData/Local/VRChatCreatorCompanion/VRChatProjects/Unity_extension_development/Assets/test/texture/Gradation_ModsCoat [WorkCopy]_20260124021125.png
+﻿[2026-01-24 17:21:19] [GradationBakerWindow] Bake & Save button clicked.
+[2026-01-24 17:21:19] [GradationBaker] Starting Bake...
+[2026-01-24 17:21:19] [GradationBaker] Target Mesh: ModsCoat, Vertex Count: 8588
+[2026-01-24 17:21:19] [GradationBaker] Shader found: Hidden/GradationTextureGenerator/Bake
+[2026-01-24 17:21:19] [GradationBaker] Box Center: (1.49, 1.02, 0.02), Height: 0.9323655
+[2026-01-24 17:21:19] [GradationBaker] Resolution: 2048
+[2026-01-24 17:21:19] [GradationBaker] Drawing Mesh Now...
+[2026-01-24 17:21:19] [GradationBaker] ReadPixels finished.
+[2026-01-24 17:21:19] [GradationBakerWindow] SavePath setting: Assets/
+[2026-01-24 17:21:19] [GradationBakerWindow] Full Directory Path: C:/Users/dennoko/AppData/Local/VRChatCreatorCompanion/VRChatProjects/Unity_extension_development/Assets
+[2026-01-24 17:21:19] [GradationBakerWindow] Writing file to: C:/Users/dennoko/AppData/Local/VRChatCreatorCompanion/VRChatProjects/Unity_extension_development/Assets/Gradation_ModsCoat [WorkCopy]_20260124172119.png
+[2026-01-24 17:21:20] [GradationTextureGenerator] Saved to C:/Users/dennoko/AppData/Local/VRChatCreatorCompanion/VRChatProjects/Unity_extension_development/Assets/Gradation_ModsCoat [WorkCopy]_20260124172119.png
