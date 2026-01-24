@@ -2,7 +2,7 @@
 
 Unity Editor拡張ツール。3Dメッシュに対してグラデーションテクスチャを生成・ベイクします。
 
-![Unity](https://img.shields.io/badge/Unity-2019.4%2B-blue)
+![Unity](https://img.shields.io/badge/Unity-2022.3%2B-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## 概要
