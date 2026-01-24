@@ -68,3 +68,7 @@ Select `Tools > Gradation Baker` from the menu to open the window.
 ### Language Toggle
 
 Use the "英語表記を有効化" checkbox at the top right of the window to switch between English and Japanese.
+ 
+ ## Notes
+ 
+ - The preview overlay is simplified. The generated texture colors will correspond to an opacity of 1 (the preview opacity slider value does not affect the output).
