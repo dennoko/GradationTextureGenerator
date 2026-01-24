@@ -1,4 +1,4 @@
-Shader "Hidden/GradationTextureGenerator/Preview"
+Shader "Hidden/GradationBaker/Preview"
 {
     Properties
     {

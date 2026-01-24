@@ -1,12 +1,12 @@
 using UnityEngine;
 using System.Collections.Generic;
-using GradationTextureGenerator.Data;
+using GradationBaker.Data;
 
-namespace GradationTextureGenerator.Execute
+namespace GradationBaker.Execute
 {
-    public class GradationBaker
+    public class GradationBakingExecutor
     {
-        private const string ShaderPath = "Hidden/GradationTextureGenerator/Bake";
+        private const string ShaderPath = "Hidden/GradationBaker/Bake";
 
         /// <summary>
         /// Bakes gradation textures for all mesh entries (with optional mirror)
@@ -21,12 +21,12 @@ namespace GradationTextureGenerator.Execute
                 if (renderer == null) continue;
                 
                 // Bake main gradation
-                Texture2D tex = Bake(settings, renderer, false);
+                Texture2D tex = Bake(settings, entry, false);
                 
                 // If mirror is enabled, blend with mirrored gradation
                 if (settings.UseMirror && settings.MirrorAxis != MirrorAxis.None && tex != null)
                 {
-                    Texture2D mirrorTex = Bake(settings, renderer, true);
+                    Texture2D mirrorTex = Bake(settings, entry, true);
                     if (mirrorTex != null)
                     {
                         // Blend textures (max blend for gradation)
@@ -47,10 +47,11 @@ namespace GradationTextureGenerator.Execute
         }
 
         /// <summary>
-        /// Bakes a single renderer to texture
+        /// Bakes a single mesh entry to texture
         /// </summary>
-        public Texture2D Bake(GradationSettings settings, Renderer renderer, bool useMirror = false)
+        public Texture2D Bake(GradationSettings settings, MeshEntry entry, bool useMirror = false)
         {
+            Renderer renderer = entry.ActiveRenderer;
             FileLogger.Log($"[GradationBaker] Starting Bake for {renderer.name} (mirror={useMirror})...");
             
             Mesh mesh = GetMesh(renderer);
@@ -95,13 +96,13 @@ namespace GradationTextureGenerator.Execute
             mat.SetMatrix("_WorldToBox", worldToBox);
             mat.SetMatrix("_ObjectToWorld", objectToWorld);
             
-            // UV Channel
-            mat.SetInt("_UVChannel", settings.UVChannel);
+            // UV Channel (per-mesh)
+            mat.SetInt("_UVChannel", entry.UVChannel);
 
-            // Mask settings
-            if (settings.MaskTexture != null)
+            // Mask settings (per-mesh)
+            if (entry.MaskTexture != null)
             {
-                mat.SetTexture("_MaskTex", settings.MaskTexture);
+                mat.SetTexture("_MaskTex", entry.MaskTexture);
                 mat.SetInt("_UseMaskTexture", 1);
             }
             else
@@ -109,8 +110,8 @@ namespace GradationTextureGenerator.Execute
                 mat.SetInt("_UseMaskTexture", 0);
             }
 
-            mat.SetInt("_UseVertexColorMask", settings.UseVertexColorMask ? 1 : 0);
-            mat.SetInt("_InvertMask", settings.InvertMask ? 1 : 0);
+            mat.SetInt("_UseVertexColorMask", entry.UseVertexColorMask ? 1 : 0);
+            mat.SetInt("_InvertMask", entry.InvertMask ? 1 : 0);
 
             // Setup RenderTexture
             int res = settings.Resolution;

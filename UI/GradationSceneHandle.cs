@@ -1,8 +1,8 @@
 using UnityEngine;
 using UnityEditor;
-using GradationTextureGenerator.Data;
+using GradationBaker.Data;
 
-namespace GradationTextureGenerator.UI
+namespace GradationBaker.UI
 {
     /// <summary>
     /// Indicates what type of change was made via the scene handle

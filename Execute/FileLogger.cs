@@ -3,7 +3,7 @@ using System.IO;
 using System;
 using System.Text;
 
-namespace GradationTextureGenerator.Execute
+namespace GradationBaker.Execute
 {
     public static class FileLogger
     {
@@ -16,8 +16,8 @@ namespace GradationTextureGenerator.Execute
                 if (string.IsNullOrEmpty(_logPath))
                 {
                     // Find the path relative to the script or project
-                    // Assuming Assets/Editor/GradationTextureGenerator/Log/
-                    string root = "Assets/Editor/GradationTextureGenerator/Log";
+                    // Assuming Assets/Editor/GradationBaker/Log/
+                    string root = "Assets/Editor/GradationBaker/Log";
                     if (!Directory.Exists(root))
                     {
                         Directory.CreateDirectory(root);

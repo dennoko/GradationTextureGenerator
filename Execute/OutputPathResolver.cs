@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEditor;
 using System.IO;
 
-namespace GradationTextureGenerator.Execute
+namespace GradationBaker.Execute
 {
     /// <summary>
     /// Utilities for handling output file paths and naming

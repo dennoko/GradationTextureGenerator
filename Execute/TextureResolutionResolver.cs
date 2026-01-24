@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace GradationTextureGenerator.Execute
+namespace GradationBaker.Execute
 {
     public static class TextureResolutionResolver
     {

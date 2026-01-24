@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 
-namespace GradationTextureGenerator.UI
+namespace GradationBaker.UI
 {
     public class StatusBar
     {
@@ -81,17 +81,17 @@ namespace GradationTextureGenerator.UI
                 case StatusType.Success:
                     textColor = SuccessColor;
                     bgColor = SuccessBg;
-                    icon = "✓ ";
+                    icon = "✁E";
                     break;
                 case StatusType.Error:
                     textColor = ErrorColor;
                     bgColor = ErrorBg;
-                    icon = "✗ ";
+                    icon = "✁E";
                     break;
                 case StatusType.Info:
                     textColor = InfoColor;
                     bgColor = InfoBg;
-                    icon = "ⓘ ";
+                    icon = "ⓁE";
                     break;
                 default:
                     textColor = IdleColor;

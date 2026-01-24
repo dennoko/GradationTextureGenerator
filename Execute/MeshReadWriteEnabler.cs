@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 
-namespace GradationTextureGenerator.Execute
+namespace GradationBaker.Execute
 {
     public static class MeshReadWriteEnabler
     {
@@ -18,7 +18,7 @@ namespace GradationTextureGenerator.Execute
             {
                 importer.isReadable = true;
                 importer.SaveAndReimport();
-                Debug.Log($"[GradationTextureGenerator] Automatically enabled Read/Write for {mesh.name} at {assetPath}");
+                Debug.Log($"[GradationBaker] Automatically enabled Read/Write for {mesh.name} at {assetPath}");
             }
         }
     }

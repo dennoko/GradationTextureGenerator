@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-namespace GradationTextureGenerator.Data
+namespace GradationBaker.Data
 {
     public enum MirrorAxis
     {
@@ -23,6 +23,15 @@ namespace GradationTextureGenerator.Data
     {
         public Renderer SourceRenderer;
         public GameObject WorkMeshObject;
+        
+        // Per-mesh settings
+        public int UVChannel = 0;
+        public Texture2D MaskTexture;
+        public bool UseVertexColorMask = false;
+        public bool InvertMask = false;
+        
+        // UI state
+        public bool ShowDetails = false;
         
         public Renderer ActiveRenderer => WorkMeshObject != null 
             ? WorkMeshObject.GetComponent<Renderer>() 

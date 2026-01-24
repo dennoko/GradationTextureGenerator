@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 
-namespace GradationTextureGenerator.Execute
+namespace GradationBaker.Execute
 {
     /// <summary>
     /// Manages work mesh objects for avoiding coordinate issues with non-destructive components

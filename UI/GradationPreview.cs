@@ -1,18 +1,20 @@
 using UnityEngine;
 using UnityEditor;
-using GradationTextureGenerator.Data;
+using GradationBaker.Data;
 
-namespace GradationTextureGenerator.UI
+namespace GradationBaker.UI
 {
     public class GradationPreview
     {
-        private const string ShaderPath = "Hidden/GradationTextureGenerator/Preview";
+        private const string ShaderPath = "Hidden/GradationBaker/Preview";
         private Material _previewMaterial;
         private Texture2D _lutTexture;
 
-        public void UpdatePreview(GradationSettings settings, Renderer renderer, Matrix4x4 localToWorld, bool useMirror = false)
+
+        public void UpdatePreview(GradationSettings settings, MeshEntry entry, bool useMirror = false)
         {
             if (Event.current.type != EventType.Repaint) return;
+            Renderer renderer = entry.ActiveRenderer;
             if (renderer == null) return;
             
             Mesh mesh = GetMesh(renderer);
@@ -46,6 +48,7 @@ namespace GradationTextureGenerator.UI
                 new Vector3(GradationSettings.BoxWidth, settings.BoxHeight, GradationSettings.BoxDepth)
             );
             Matrix4x4 worldToBox = boxMatrix.inverse;
+            Matrix4x4 localToWorld = renderer.localToWorldMatrix;
 
             // Set shader properties
             _previewMaterial.SetTexture("_MainTex", _lutTexture);
@@ -54,19 +57,19 @@ namespace GradationTextureGenerator.UI
             _previewMaterial.SetFloat("_BoxHeight", settings.BoxHeight);
             _previewMaterial.SetFloat("_Opacity", settings.PreviewOpacity);
             
-            // Mask settings
-            _previewMaterial.SetInt("_UVChannel", settings.UVChannel);
-            if (settings.MaskTexture != null)
+            // Mask settings (per-mesh)
+            _previewMaterial.SetInt("_UVChannel", entry.UVChannel);
+            if (entry.MaskTexture != null)
             {
-                _previewMaterial.SetTexture("_MaskTex", settings.MaskTexture);
+                _previewMaterial.SetTexture("_MaskTex", entry.MaskTexture);
                 _previewMaterial.SetInt("_UseMaskTexture", 1);
             }
             else
             {
                 _previewMaterial.SetInt("_UseMaskTexture", 0);
             }
-            _previewMaterial.SetInt("_UseVertexColorMask", settings.UseVertexColorMask ? 1 : 0);
-            _previewMaterial.SetInt("_InvertMask", settings.InvertMask ? 1 : 0);
+            _previewMaterial.SetInt("_UseVertexColorMask", entry.UseVertexColorMask ? 1 : 0);
+            _previewMaterial.SetInt("_InvertMask", entry.InvertMask ? 1 : 0);
 
             // Draw mesh with preview material
             if (_previewMaterial.SetPass(0))
@@ -86,12 +89,12 @@ namespace GradationTextureGenerator.UI
                 if (renderer == null) continue;
                 
                 // Draw main gradation
-                UpdatePreview(settings, renderer, renderer.localToWorldMatrix, false);
+                UpdatePreview(settings, entry, false);
                 
                 // Draw mirrored gradation if enabled
                 if (settings.UseMirror && settings.MirrorAxis != MirrorAxis.None)
                 {
-                    UpdatePreview(settings, renderer, renderer.localToWorldMatrix, true);
+                    UpdatePreview(settings, entry, true);
                 }
             }
         }

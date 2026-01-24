@@ -1,18 +1,18 @@
 using UnityEngine;
 using UnityEditor;
 using UnityEditorInternal;
-using GradationTextureGenerator.Data;
-using GradationTextureGenerator.Execute;
-using GradationTextureGenerator.Localization;
+using GradationBaker.Data;
+using GradationBaker.Execute;
+using GradationBaker.Localization;
 using System.IO;
 using System.Collections.Generic;
 
-namespace GradationTextureGenerator.UI
+namespace GradationBaker.UI
 {
     public class GradationBakerWindow : EditorWindow
     {
         private GradationSettings _settings = new GradationSettings();
-        private GradationBaker _baker = new GradationBaker();
+        private GradationBakingExecutor _baker = new GradationBakingExecutor();
         private GradationSceneHandle _sceneHandle = new GradationSceneHandle();
         private GradationPreview _preview = new GradationPreview();
         private StatusBar _statusBar = new StatusBar();
@@ -87,10 +87,17 @@ namespace GradationTextureGenerator.UI
                 float removeWidth = 24f;
                 float spacing = 4f;
                 float statusWidth = 50f;
+                float lineHeight = EditorGUIUtility.singleLineHeight;
+                
+                // --- First Line: Renderer Field ---
+                Rect headerRect = new Rect(rect.x, rect.y + 2, rect.width, lineHeight);
                 
                 // Renderer field
-                float fieldWidth = rect.width - removeWidth - statusWidth - spacing * 2;
-                Rect fieldRect = new Rect(rect.x, rect.y + 2, fieldWidth, EditorGUIUtility.singleLineHeight);
+                float fieldWidth = rect.width - removeWidth - statusWidth - spacing * 3 - 20; // 20 for foldout
+                Rect foldoutRect = new Rect(rect.x, headerRect.y, 20, lineHeight);
+                Rect fieldRect = new Rect(rect.x + 20, headerRect.y, fieldWidth, lineHeight);
+                
+                entry.ShowDetails = EditorGUI.Foldout(foldoutRect, entry.ShowDetails, "");
                 
                 EditorGUI.BeginChangeCheck();
                 entry.SourceRenderer = (Renderer)EditorGUI.ObjectField(fieldRect, entry.SourceRenderer, typeof(Renderer), true);
@@ -101,24 +108,77 @@ namespace GradationTextureGenerator.UI
                     {
                         InitializeBoxFromRenderer(entry.SourceRenderer);
                     }
+                    // Initialize default settings from global settings
+                    entry.UVChannel = _settings.UVChannel;
+                    entry.MaskTexture = _settings.MaskTexture;
+                    entry.UseVertexColorMask = _settings.UseVertexColorMask;
+                    entry.InvertMask = _settings.InvertMask;
                 }
                 
                 // Work mesh status label
-                Rect statusRect = new Rect(rect.x + fieldWidth + spacing, rect.y + 2, statusWidth, EditorGUIUtility.singleLineHeight);
+                Rect statusRect = new Rect(rect.x + 20 + fieldWidth + spacing, headerRect.y, statusWidth, lineHeight);
                 if (entry.HasWorkMesh)
                 {
                     GUI.Label(statusRect, "[" + L("work") + "]");
                 }
                 
                 // Remove button
-                Rect removeRect = new Rect(rect.x + fieldWidth + statusWidth + spacing * 2, rect.y + 2, removeWidth, EditorGUIUtility.singleLineHeight);
+                Rect removeRect = new Rect(rect.x + rect.width - removeWidth, headerRect.y, removeWidth, lineHeight);
                 if (GUI.Button(removeRect, "×"))
                 {
                     RemoveMeshEntry(index);
                 }
+                
+                // --- Detailed Settings (if expanded) ---
+                if (entry.ShowDetails)
+                {
+                    EditorGUI.BeginChangeCheck();
+                    
+                    float y = rect.y + lineHeight + 6;
+                    float indent = 20f;
+                    float labelW = 80f;
+                    float contentW = rect.width - indent - labelW - 10;
+                    
+                    // UV Channel
+                    Rect uvLabelRect = new Rect(rect.x + indent, y, labelW, lineHeight);
+                    Rect uvFieldRect = new Rect(rect.x + indent + labelW, y, contentW, lineHeight);
+                    GUI.Label(uvLabelRect, L("uv_channel"));
+                    string[] uvOptions = { "UV0", "UV1", "UV2", "UV3" };
+                    entry.UVChannel = EditorGUI.Popup(uvFieldRect, entry.UVChannel, uvOptions);
+                    
+                    y += lineHeight + 2;
+                    
+                    // Mask Texture
+                    Rect maskLabelRect = new Rect(rect.x + indent, y, labelW, lineHeight);
+                    Rect maskFieldRect = new Rect(rect.x + indent + labelW, y, contentW, lineHeight);
+                    GUI.Label(maskLabelRect, L("mask_texture"));
+                    entry.MaskTexture = (Texture2D)EditorGUI.ObjectField(maskFieldRect, entry.MaskTexture, typeof(Texture2D), false);
+                    
+                    y += lineHeight + 2;
+                    
+                    // Mask Options
+                    Rect optRect1 = new Rect(rect.x + indent + labelW, y, 120, lineHeight);
+                    Rect optRect2 = new Rect(rect.x + indent + labelW + 120, y, 100, lineHeight);
+                    entry.UseVertexColorMask = EditorGUI.ToggleLeft(optRect1, L("use_vertex_color"), entry.UseVertexColorMask);
+                    entry.InvertMask = EditorGUI.ToggleLeft(optRect2, L("invert_mask"), entry.InvertMask);
+                    
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        SceneView.RepaintAll();
+                    }
+                }
             };
             
-            _meshList.elementHeight = EditorGUIUtility.singleLineHeight + 6;
+            _meshList.elementHeightCallback = (int index) =>
+            {
+                if (index >= _settings.MeshEntries.Count) return EditorGUIUtility.singleLineHeight + 6;
+                var entry = _settings.MeshEntries[index];
+                if (entry.ShowDetails)
+                {
+                    return (EditorGUIUtility.singleLineHeight + 2) * 4 + 10; // Header + 3 rows + padding
+                }
+                return EditorGUIUtility.singleLineHeight + 6;
+            };
         }
 
         private void OnGUI()

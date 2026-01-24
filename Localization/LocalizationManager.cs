@@ -3,7 +3,7 @@ using UnityEditor;
 using System.Collections.Generic;
 using System.IO;
 
-namespace GradationTextureGenerator.Localization
+namespace GradationBaker.Localization
 {
     public static class LocalizationManager
     {
@@ -99,7 +99,7 @@ namespace GradationTextureGenerator.Localization
             }
             
             // Fallback path
-            return "Assets/Editor/GradationTextureGenerator/Localization";
+            return "Assets/Editor/GradationBaker/Localization";
         }
 
         /// <summary>
@@ -142,7 +142,7 @@ namespace GradationTextureGenerator.Localization
 
         /// <summary>
         /// Draw language toggle checkbox and return true if changed
-        /// Shows "Enable English Mode" when in Japanese, "英語表記を有効化" when in English
+        /// Shows "Enable English Mode" when in Japanese, "英語表記を有効匁E when in English
         /// </summary>
         public static bool DrawLanguageSelector()
         {
