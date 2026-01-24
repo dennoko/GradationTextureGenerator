@@ -42,5 +42,8 @@
     "language": "言語",
     "mesh_item": "メッシュ {0}",
     "work": "作業用",
-    "remove": "削除"
+    "remove": "削除",
+    "status_bake_success": "{0}個のテクスチャを保存しました",
+    "status_bake_error": "ベイクに失敗しました",
+    "status_gradient_saved": "グラデーションを保存しました"
 }

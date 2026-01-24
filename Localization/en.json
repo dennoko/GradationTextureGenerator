@@ -42,5 +42,8 @@
     "language": "Language",
     "mesh_item": "Mesh {0}",
     "work": "Work",
-    "remove": "Remove"
+    "remove": "Remove",
+    "status_bake_success": "{0} texture(s) saved",
+    "status_bake_error": "Bake failed",
+    "status_gradient_saved": "Gradient saved"
 }

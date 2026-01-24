@@ -15,6 +15,7 @@ namespace GradationTextureGenerator.UI
         private GradationBaker _baker = new GradationBaker();
         private GradationSceneHandle _sceneHandle = new GradationSceneHandle();
         private GradationPreview _preview = new GradationPreview();
+        private StatusBar _statusBar = new StatusBar();
         
         // ReorderableList for meshes
         private ReorderableList _meshList;
@@ -365,6 +366,16 @@ namespace GradationTextureGenerator.UI
                 BakeAndSave();
             }
             GUI.backgroundColor = Color.white;
+            
+            // Status bar at bottom
+            GUILayout.FlexibleSpace();
+            _statusBar.Draw();
+            
+            // Request repaint for auto-clear
+            if (_statusBar.NeedsRepaint())
+            {
+                Repaint();
+            }
         }
 
         private void HandleDragAndDrop(Rect dropArea)
@@ -518,12 +529,12 @@ namespace GradationTextureGenerator.UI
             
             if (savedCount > 0)
             {
-                string message = string.Join("\n", savedPaths);
-                EditorUtility.DisplayDialog(L("success_title"), L("success_message", message), "OK");
+                string message = L("status_bake_success", savedCount);
+                _statusBar.Show(message, StatusBar.StatusType.Success);
             }
             else
             {
-                EditorUtility.DisplayDialog(L("error_title"), L("error_message"), "OK");
+                _statusBar.Show(L("status_bake_error"), StatusBar.StatusType.Error, 0);
             }
         }
 
@@ -691,6 +702,7 @@ namespace GradationTextureGenerator.UI
             }
             
             FileLogger.Log($"[GradationBakerWindow] Gradient saved to: {fullPath}");
+            _statusBar.Show(L("status_gradient_saved"), StatusBar.StatusType.Success);
         }
 
         private string GenerateUniqueGradientFilename(string folderPath)
