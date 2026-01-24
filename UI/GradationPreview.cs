@@ -53,6 +53,20 @@ namespace GradationTextureGenerator.UI
             _previewMaterial.SetMatrix("_ObjectToWorld", localToWorld);
             _previewMaterial.SetFloat("_BoxHeight", settings.BoxHeight);
             _previewMaterial.SetFloat("_Opacity", settings.PreviewOpacity);
+            
+            // Mask settings
+            _previewMaterial.SetInt("_UVChannel", settings.UVChannel);
+            if (settings.MaskTexture != null)
+            {
+                _previewMaterial.SetTexture("_MaskTex", settings.MaskTexture);
+                _previewMaterial.SetInt("_UseMaskTexture", 1);
+            }
+            else
+            {
+                _previewMaterial.SetInt("_UseMaskTexture", 0);
+            }
+            _previewMaterial.SetInt("_UseVertexColorMask", settings.UseVertexColorMask ? 1 : 0);
+            _previewMaterial.SetInt("_InvertMask", settings.InvertMask ? 1 : 0);
 
             // Draw mesh with preview material
             if (_previewMaterial.SetPass(0))

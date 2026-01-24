@@ -40,6 +40,7 @@ Shader "Hidden/GradationTextureGenerator/Bake"
 
             sampler2D _MainTex; // Gradient LUT
             sampler2D _MaskTex; // Mask Texture (optional)
+            float4 _MaskTex_ST; // Mask texture tiling/offset
             
             // Cube-based parameters
             float4x4 _WorldToBox;
@@ -89,7 +90,9 @@ Shader "Hidden/GradationTextureGenerator/Bake"
                 
                 if (_UseMaskTexture == 1)
                 {
-                    float4 maskSample = tex2D(_MaskTex, i.uv);
+                    // Use the same UV channel as output for mask sampling
+                    float2 maskUV = TRANSFORM_TEX(i.uv, _MaskTex);
+                    float4 maskSample = tex2D(_MaskTex, maskUV);
                     mask *= maskSample.r; 
                 }
 

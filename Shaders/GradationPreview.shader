@@ -3,6 +3,7 @@ Shader "Hidden/GradationTextureGenerator/Preview"
     Properties
     {
         _MainTex ("LUT", 2D) = "white" {}
+        _MaskTex ("Mask", 2D) = "white" {}
         _Opacity ("Opacity", Range(0, 1)) = 0.5
     }
     SubShader
@@ -25,33 +26,51 @@ Shader "Hidden/GradationTextureGenerator/Preview"
             struct appdata
             {
                 float4 vertex : POSITION;
+                float2 uv0 : TEXCOORD0;
+                float2 uv1 : TEXCOORD1;
+                float2 uv2 : TEXCOORD2;
+                float2 uv3 : TEXCOORD3;
+                float4 color : COLOR;
             };
 
             struct v2f
             {
                 float4 vertex : SV_POSITION;
                 float3 worldPos : TEXCOORD0;
+                float2 uv : TEXCOORD1;
+                float4 color : COLOR;
             };
 
             sampler2D _MainTex; // Gradient LUT
+            sampler2D _MaskTex; // Mask Texture
+            float4 _MaskTex_ST;
             
-            // New cube-based parameters
-            float4x4 _WorldToBox;     // World to box local space transform
-            float4x4 _ObjectToWorld;  // Object to world transform
+            // Cube-based parameters
+            float4x4 _WorldToBox;
+            float4x4 _ObjectToWorld;
             float _BoxHeight;
             float _Opacity;
             
-            // Legacy parameters (kept for compatibility)
-            float3 _Direction;
-            float _RangeMin;
-            float _RangeMax;
+            // UV Channel and Mask settings
+            int _UVChannel;
+            int _UseMaskTexture;
+            int _UseVertexColorMask;
+            int _InvertMask;
 
             v2f vert (appdata v)
             {
                 v2f o;
                 o.vertex = UnityObjectToClipPos(v.vertex);
-                // Transform vertex to world space
                 o.worldPos = mul(_ObjectToWorld, v.vertex).xyz;
+                
+                // Select UV channel
+                float2 selectedUV = v.uv0;
+                if (_UVChannel == 1) selectedUV = v.uv1;
+                else if (_UVChannel == 2) selectedUV = v.uv2;
+                else if (_UVChannel == 3) selectedUV = v.uv3;
+                
+                o.uv = selectedUV;
+                o.color = v.color;
                 return o;
             }
 
@@ -61,14 +80,33 @@ Shader "Hidden/GradationTextureGenerator/Preview"
                 float3 boxLocalPos = mul(_WorldToBox, float4(i.worldPos, 1.0)).xyz;
                 
                 // In box local space, Y goes from -0.5 to 0.5 (normalized box)
-                // Map to 0-1 range for gradient sampling
                 float t = saturate(boxLocalPos.y + 0.5);
                 
                 // Sample Gradient Color from LUT
                 fixed4 col = tex2D(_MainTex, float2(t, 0.5));
                 
-                // Apply global opacity for preview
-                col.a *= _Opacity;
+                // Calculate Mask
+                float mask = 1.0;
+                
+                if (_UseMaskTexture == 1)
+                {
+                    float2 maskUV = TRANSFORM_TEX(i.uv, _MaskTex);
+                    float4 maskSample = tex2D(_MaskTex, maskUV);
+                    mask *= maskSample.r;
+                }
+                
+                if (_UseVertexColorMask == 1)
+                {
+                    mask *= i.color.r;
+                }
+                
+                if (_InvertMask == 1)
+                {
+                    mask = 1.0 - mask;
+                }
+                
+                // Apply mask and global opacity for preview
+                col.a *= mask * _Opacity;
                 
                 return col;
             }
