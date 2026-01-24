@@ -28,6 +28,9 @@ namespace GradationBaker.UI
         private bool _helpFoldout = false;
         private bool _outputFoldout = true;
         
+        // Scroll position
+        private Vector2 _scrollPosition;
+        
         // Styles
         private GUIStyle _dropAreaStyle;
         private GUIStyle _sectionStyle;
@@ -201,16 +204,18 @@ namespace GradationBaker.UI
                 return;
             }
 
+            _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition, GUILayout.ExpandWidth(true));
+
             EditorGUILayout.Space(5);
             
             // Target Meshes Section with Drag & Drop
             _meshFoldout = EditorGUILayout.Foldout(_meshFoldout, L("target_meshes"), true, EditorStyles.foldoutHeader);
             if (_meshFoldout)
             {
-                EditorGUILayout.BeginVertical(_sectionStyle);
+                EditorGUILayout.BeginVertical(_sectionStyle, GUILayout.ExpandWidth(true));
                 
                 // Drag & Drop Area
-                Rect dropArea = GUILayoutUtility.GetRect(0, 50, GUILayout.ExpandWidth(true));
+                Rect dropArea = GUILayoutUtility.GetRect(0, 50, GUILayout.ExpandWidth(true), GUILayout.MinWidth(100));
                 GUI.Box(dropArea, L("drop_meshes_here"), _dropAreaStyle);
                 HandleDragAndDrop(dropArea);
                 
@@ -239,10 +244,15 @@ namespace GradationBaker.UI
 
             if (_settings.MeshEntries.Count == 0 || _settings.GetPrimaryRenderer() == null)
             {
+                EditorGUILayout.BeginVertical(GUILayout.ExpandWidth(true));
                 EditorGUILayout.Space(10);
                 EditorGUILayout.LabelField(L("help_title"), EditorStyles.boldLabel);
                 EditorGUILayout.HelpBox(L("help_usage"), MessageType.Info);
                 EditorGUILayout.HelpBox(L("help_warning"), MessageType.Warning);
+                EditorGUILayout.EndVertical();
+                EditorGUILayout.EndScrollView();
+                _statusBar.Draw();
+                if (_statusBar.NeedsRepaint()) Repaint();
                 return;
             }
 
@@ -252,7 +262,7 @@ namespace GradationBaker.UI
             _gradientFoldout = EditorGUILayout.Foldout(_gradientFoldout, L("gradient"), true, EditorStyles.foldoutHeader);
             if (_gradientFoldout)
             {
-                EditorGUILayout.BeginVertical(_sectionStyle);
+                EditorGUILayout.BeginVertical(_sectionStyle, GUILayout.ExpandWidth(true));
                 EditorGUI.BeginChangeCheck();
                 _settings.Gradient = EditorGUILayout.GradientField(L("colors"), _settings.Gradient);
                 if (EditorGUI.EndChangeCheck())
@@ -281,7 +291,7 @@ namespace GradationBaker.UI
             _boxSettingsFoldout = EditorGUILayout.Foldout(_boxSettingsFoldout, L("box_control"), true, EditorStyles.foldoutHeader);
             if (_boxSettingsFoldout)
             {
-                EditorGUILayout.BeginVertical(_sectionStyle);
+                EditorGUILayout.BeginVertical(_sectionStyle, GUILayout.ExpandWidth(true));
                 
                 if (GUILayout.Button(L("fit_to_bounds")))
                 {
@@ -330,7 +340,7 @@ namespace GradationBaker.UI
             _mirrorFoldout = EditorGUILayout.Foldout(_mirrorFoldout, L("mirror"), true, EditorStyles.foldoutHeader);
             if (_mirrorFoldout)
             {
-                EditorGUILayout.BeginVertical(_sectionStyle);
+                EditorGUILayout.BeginVertical(_sectionStyle, GUILayout.ExpandWidth(true));
                 
                 EditorGUI.BeginChangeCheck();
                 _settings.UseMirror = EditorGUILayout.Toggle(L("mirror"), _settings.UseMirror);
@@ -360,7 +370,7 @@ namespace GradationBaker.UI
             _outputFoldout = EditorGUILayout.Foldout(_outputFoldout, L("output_settings"), true, EditorStyles.foldoutHeader);
             if (_outputFoldout)
             {
-                EditorGUILayout.BeginVertical(_sectionStyle);
+                EditorGUILayout.BeginVertical(_sectionStyle, GUILayout.ExpandWidth(true));
                 
                 // Set label width for 2:1 ratio
                 float originalLabelWidth = EditorGUIUtility.labelWidth;
@@ -438,8 +448,9 @@ namespace GradationBaker.UI
                 EditorGUILayout.HelpBox(L("help_warning"), MessageType.Warning);
             }
 
+            EditorGUILayout.EndScrollView();
+            
             // Status bar at bottom
-            GUILayout.FlexibleSpace();
             _statusBar.Draw();
             
             // Request repaint for auto-clear
