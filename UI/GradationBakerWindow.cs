@@ -295,23 +295,26 @@ namespace GradationBaker.UI
                 
                 EditorGUI.BeginChangeCheck();
                 Vector3 center = EditorGUILayout.Vector3Field(L("center"), _settings.BoxCenter);
-                _settings.BoxCenter = RoundVector3(center, 2);
                 
                 EditorGUILayout.BeginHorizontal();
                 Vector3 euler = _settings.BoxRotation.eulerAngles;
                 euler = EditorGUILayout.Vector3Field(L("rotation"), euler);
-                _settings.BoxRotation = Quaternion.Euler(RoundVector3(euler, 2));
+                
                 if (GUILayout.Button(L("reset"), GUILayout.Width(50)))
                 {
                     _settings.BoxRotation = Quaternion.identity;
+                    SceneView.RepaintAll();
+                    GUI.FocusControl(null); // Clear focus to update fields
                 }
                 EditorGUILayout.EndHorizontal();
                 
                 float height = EditorGUILayout.FloatField(L("height"), _settings.BoxHeight);
-                _settings.BoxHeight = Mathf.Max(0.01f, Mathf.Round(height * 100f) / 100f);
                 
                 if (EditorGUI.EndChangeCheck())
                 {
+                    _settings.BoxCenter = RoundVector3(center, 2);
+                    _settings.BoxRotation = Quaternion.Euler(RoundVector3(euler, 2));
+                    _settings.BoxHeight = Mathf.Max(0.01f, Mathf.Round(height * 100f) / 100f);
                     SceneView.RepaintAll();
                 }
                 
