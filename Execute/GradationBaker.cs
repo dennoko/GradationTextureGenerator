@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.Rendering;
 using GradationTextureGenerator.Data;
 
 namespace GradationTextureGenerator.Execute
@@ -25,7 +24,7 @@ namespace GradationTextureGenerator.Execute
             }
             FileLogger.Log($"[GradationBaker] Target Mesh: {mesh.name}, Vertex Count: {mesh.vertexCount}");
 
-            // Ensure Read/Write to access vertices for bounds calculation (and potentially bake)
+            // Ensure Read/Write to access vertices
             MeshReadWriteEnabler.EnsureReadWriteEnabled(mesh);
 
             Shader shader = Shader.Find(ShaderPath);
@@ -41,22 +40,24 @@ namespace GradationTextureGenerator.Execute
             Texture2D lut = CreateGradientLUT(settings.Gradient);
             mat.SetTexture("_MainTex", lut);
 
-            // Set Properties
-            mat.SetVector("_Direction", settings.GradientDirection.normalized);
+            // Calculate world-to-box transformation matrix
+            Matrix4x4 boxMatrix = Matrix4x4.TRS(
+                settings.BoxCenter, 
+                settings.BoxRotation, 
+                new Vector3(GradationSettings.BoxWidth, settings.BoxHeight, GradationSettings.BoxDepth)
+            );
+            Matrix4x4 worldToBox = boxMatrix.inverse;
             
-            float min = settings.MinRange;
-            float max = settings.MaxRange;
+            // For baking, we use object space directly (identity transform)
+            // But we need to account for the renderer's transform
+            Matrix4x4 objectToWorld = settings.TargetRenderer.localToWorldMatrix;
 
-            if (settings.AutoNormalize)
-            {
-                (min, max) = CalculateNormalizeRange(mesh, settings.GradientDirection);
-                FileLogger.Log($"[GradationBaker] AutoNormalize Range: {min} to {max}");
-                // Note: We don't write back to settings here to avoid side effects during bake,
-                // but the UI might want to pre-calculate this.
-            }
-            mat.SetFloat("_RangeMin", min);
-            mat.SetFloat("_RangeMax", max);
+            mat.SetMatrix("_WorldToBox", worldToBox);
+            mat.SetMatrix("_ObjectToWorld", objectToWorld);
 
+            FileLogger.Log($"[GradationBaker] Box Center: {settings.BoxCenter}, Height: {settings.BoxHeight}");
+
+            // Mask settings
             if (settings.MaskTexture != null)
             {
                 mat.SetTexture("_MaskTex", settings.MaskTexture);
@@ -78,7 +79,6 @@ namespace GradationTextureGenerator.Execute
             GL.Clear(true, true, Color.clear);
 
             // Draw Mesh
-            // SetPass(0) activates the first pass
             if (mat.SetPass(0))
             {
                 FileLogger.Log("[GradationBaker] Drawing Mesh Now...");
@@ -115,31 +115,12 @@ namespace GradationTextureGenerator.Execute
             return null;
         }
 
-        public (float min, float max) CalculateNormalizeRange(Mesh mesh, Vector3 direction)
+        /// <summary>
+        /// Fits the box settings to mesh bounds along the current gradient direction
+        /// </summary>
+        public void FitBoxToMesh(GradationSettings settings, Mesh mesh, Transform transform)
         {
-            // Simple bound calculation in Object Space
-            // Because we bake based on Object Space position in shader.
-            if (mesh == null) return (0, 1);
-
-            Vector3[] vertices = mesh.vertices;
-            if (vertices.Length == 0) return (0, 1);
-
-            float min = float.MaxValue;
-            float max = float.MinValue;
-            
-            Vector3 dir = direction.normalized;
-            
-            foreach (var v in vertices)
-            {
-                float t = Vector3.Dot(v, dir);
-                if (t < min) min = t;
-                if (t > max) max = t;
-            }
-            
-            // Prevent zero division if flat
-            if (Mathf.Abs(max - min) < 0.0001f) max = min + 1.0f;
-            
-            return (min, max);
+            settings.FitToMeshBounds(mesh, transform);
         }
 
         private Texture2D CreateGradientLUT(Gradient gradient)
@@ -149,7 +130,6 @@ namespace GradationTextureGenerator.Execute
             tex.wrapMode = TextureWrapMode.Clamp;
             tex.filterMode = FilterMode.Bilinear;
             
-            // Color[] pixels = new Color[width]; // Can use SetPixels for speed
             for (int i = 0; i < width; i++)
             {
                 float t = (float)i / (width - 1);

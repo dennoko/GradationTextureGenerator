@@ -30,38 +30,42 @@ Shader "Hidden/GradationTextureGenerator/Preview"
             struct v2f
             {
                 float4 vertex : SV_POSITION;
-                float3 objectPos : TEXCOORD0;
+                float3 worldPos : TEXCOORD0;
             };
 
             sampler2D _MainTex; // Gradient LUT
             
-            float3 _Direction; // Gradient Direction (Normalized)
-            float _RangeMin;
-            float _RangeMax;
+            // New cube-based parameters
+            float4x4 _WorldToBox;     // World to box local space transform
+            float4x4 _ObjectToWorld;  // Object to world transform
+            float _BoxHeight;
             float _Opacity;
             
-            // Mask props (Optional for preview, can keep simple initially)
-            // To support masks in preview, we need UVs and mask texture prop.
-            // Let's implement full parity with Bake shader for accuracy.
+            // Legacy parameters (kept for compatibility)
+            float3 _Direction;
+            float _RangeMin;
+            float _RangeMax;
 
             v2f vert (appdata v)
             {
                 v2f o;
                 o.vertex = UnityObjectToClipPos(v.vertex);
-                o.objectPos = v.vertex.xyz;
+                // Transform vertex to world space
+                o.worldPos = mul(_ObjectToWorld, v.vertex).xyz;
                 return o;
             }
 
             fixed4 frag (v2f i) : SV_Target
             {
-                // Calculate gradient factor t based on object position and direction
-                float t = dot(i.objectPos, _Direction);
+                // Transform world position to box local space
+                float3 boxLocalPos = mul(_WorldToBox, float4(i.worldPos, 1.0)).xyz;
                 
-                // Optimize t to 0-1 range based on Min/Max
-                float normalizedT = saturate((t - _RangeMin) / (_RangeMax - _RangeMin));
+                // In box local space, Y goes from -0.5 to 0.5 (normalized box)
+                // Map to 0-1 range for gradient sampling
+                float t = saturate(boxLocalPos.y + 0.5);
                 
                 // Sample Gradient Color from LUT
-                fixed4 col = tex2D(_MainTex, float2(normalizedT, 0.5));
+                fixed4 col = tex2D(_MainTex, float2(t, 0.5));
                 
                 // Apply global opacity for preview
                 col.a *= _Opacity;

@@ -12,7 +12,12 @@ namespace GradationTextureGenerator.UI
         private GradationBaker _baker = new GradationBaker();
         private GradationSceneHandle _sceneHandle = new GradationSceneHandle();
         private GradationPreview _preview = new GradationPreview();
-        private bool _previewEnabled = true; // Default ON
+        private bool _previewEnabled = true;
+        
+        // Foldout states
+        private bool _boxSettingsFoldout = true;
+        private bool _maskingFoldout = true;
+        private bool _outputFoldout = true;
         
         [MenuItem("Tools/Gradation Texture Generator")]
         public static void ShowWindow()
@@ -37,7 +42,6 @@ namespace GradationTextureGenerator.UI
             // Master Toggle in Toolbar style
             EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
             _settings.IsToolActive = EditorGUILayout.ToggleLeft("Enable Tool", _settings.IsToolActive, GUILayout.Width(120));
-            // Force repaint scene view when toggled to show/hide handles immediately
             if (GUI.changed) SceneView.RepaintAll();
             EditorGUILayout.EndHorizontal();
 
@@ -47,8 +51,10 @@ namespace GradationTextureGenerator.UI
                 return;
             }
 
-            GUILayout.Label("Settings", EditorStyles.boldLabel);
+            EditorGUILayout.Space(5);
             
+            // Target Renderer
+            GUILayout.Label("Target", EditorStyles.boldLabel);
             EditorGUI.BeginChangeCheck();
             Renderer newRenderer = (Renderer)EditorGUILayout.ObjectField("Target Renderer", _settings.TargetRenderer, typeof(Renderer), true);
             if (EditorGUI.EndChangeCheck())
@@ -57,77 +63,129 @@ namespace GradationTextureGenerator.UI
                 if (newRenderer != null)
                 {
                     _settings.Resolution = TextureResolutionResolver.ResolveDefaultResolution(newRenderer);
-                    // Also auto-calculate range on assign if auto-normalize is ON
-                    if (_settings.AutoNormalize)
+                    
+                    // Initialize box to mesh bounds
+                    Mesh mesh = GetMesh(newRenderer);
+                    if (mesh != null)
                     {
-                         Mesh mesh = GetMesh(newRenderer);
-                         if (mesh != null)
-                         {
-                             MeshReadWriteEnabler.EnsureReadWriteEnabled(mesh);
-                            (_settings.MinRange, _settings.MaxRange) = _baker.CalculateNormalizeRange(mesh, _settings.GradientDirection);
-                         }
-                    }
-                }
-            }
-
-            EditorGUI.BeginChangeCheck();
-            _settings.GradientDirection = EditorGUILayout.Vector3Field("Direction", _settings.GradientDirection);
-            _settings.Gradient = EditorGUILayout.GradientField("Gradient", _settings.Gradient);
-
-            EditorGUILayout.Space();
-            GUILayout.Label("Masking", EditorStyles.boldLabel);
-            _settings.MaskTexture = (Texture2D)EditorGUILayout.ObjectField("Mask Texture", _settings.MaskTexture, typeof(Texture2D), false);
-            _settings.UseVertexColorMask = EditorGUILayout.Toggle("Use Vertex Color", _settings.UseVertexColorMask);
-            _settings.InvertMask = EditorGUILayout.Toggle("Invert Mask", _settings.InvertMask);
-
-            EditorGUILayout.Space();
-            GUILayout.Label("Output", EditorStyles.boldLabel);
-            _settings.Resolution = EditorGUILayout.IntField("Resolution", _settings.Resolution);
-            
-            _settings.AutoNormalize = EditorGUILayout.Toggle("Auto Normalize", _settings.AutoNormalize);
-            if (!_settings.AutoNormalize)
-            {
-                _settings.MinRange = EditorGUILayout.FloatField("Min Range", _settings.MinRange);
-                _settings.MaxRange = EditorGUILayout.FloatField("Max Range", _settings.MaxRange);
-            }
-            else
-            {
-                // If AutoNormalize is ON, we might want to refresh calculation when direction changes?
-                // Or just show button "Refresh Range". 
-                // Actually, if Auto is ON, we should probably update it every frame or on change.
-                if (GUILayout.Button("Recalculate Range"))
-                {
-                     if (_settings.TargetRenderer != null)
-                    {
-                         Mesh mesh = GetMesh(_settings.TargetRenderer);
-                         if (mesh != null)
-                         {
-                             MeshReadWriteEnabler.EnsureReadWriteEnabled(mesh);
-                            (_settings.MinRange, _settings.MaxRange) = _baker.CalculateNormalizeRange(mesh, _settings.GradientDirection);
-                         }
-                    }
-                }
-                EditorGUILayout.HelpBox($"Current Range: {_settings.MinRange:F2} - {_settings.MaxRange:F2}", MessageType.Info);
-            }
-            
-            if (EditorGUI.EndChangeCheck())
-            {
-                // Auto-update range if needed when params change
-                if (_settings.AutoNormalize && _settings.TargetRenderer != null)
-                {
-                     Mesh mesh = GetMesh(_settings.TargetRenderer);
-                     if (mesh != null)
-                     {
                         MeshReadWriteEnabler.EnsureReadWriteEnabled(mesh);
-                        (_settings.MinRange, _settings.MaxRange) = _baker.CalculateNormalizeRange(mesh, _settings.GradientDirection);
-                     }
+                        _settings.FitToMeshBounds(mesh, newRenderer.transform);
+                    }
                 }
-                SceneView.RepaintAll();
+            }
+            
+            if (_settings.TargetRenderer == null)
+            {
+                EditorGUILayout.HelpBox("Please assign a Target Renderer to begin.", MessageType.Info);
+                return;
             }
 
-            EditorGUILayout.Space();
-            _previewEnabled = EditorGUILayout.Toggle("Realtime Preview", _previewEnabled);
+            EditorGUILayout.Space(5);
             
+            // Gradient
+            GUILayout.Label("Gradient", EditorStyles.boldLabel);
+            EditorGUI.BeginChangeCheck();
+            _settings.Gradient = EditorGUILayout.GradientField("Colors", _settings.Gradient);
+            bool gradientChanged = EditorGUI.EndChangeCheck();
+
+            EditorGUILayout.Space(5);
+            
+            // Box Settings
+            _boxSettingsFoldout = EditorGUILayout.Foldout(_boxSettingsFoldout, "Box Control", true, EditorStyles.foldoutHeader);
+            if (_boxSettingsFoldout)
+            {
+                EditorGUI.indentLevel++;
+                
+                EditorGUI.BeginChangeCheck();
+                
+                // Auto Normalize toggle
+                _settings.AutoNormalize = EditorGUILayout.Toggle("Auto Fit to Mesh", _settings.AutoNormalize);
+                
+                if (_settings.AutoNormalize)
+                {
+                    EditorGUILayout.HelpBox("Box will automatically fit to mesh bounds. Use the rotation handle in Scene View to change direction.", MessageType.Info);
+                    
+                    if (GUILayout.Button("Reset Box to Mesh Bounds"))
+                    {
+                        Mesh mesh = GetMesh(_settings.TargetRenderer);
+                        if (mesh != null)
+                        {
+                            MeshReadWriteEnabler.EnsureReadWriteEnabled(mesh);
+                            _settings.FitToMeshBounds(mesh, _settings.TargetRenderer.transform);
+                            SceneView.RepaintAll();
+                        }
+                    }
+                }
+                else
+                {
+                    // Manual box control
+                    _settings.BoxCenter = EditorGUILayout.Vector3Field("Center", _settings.BoxCenter);
+                    
+                    // Rotation as Euler for easier editing
+                    Vector3 euler = _settings.BoxRotation.eulerAngles;
+                    euler = EditorGUILayout.Vector3Field("Rotation", euler);
+                    _settings.BoxRotation = Quaternion.Euler(euler);
+                    
+                    _settings.BoxHeight = EditorGUILayout.FloatField("Height", _settings.BoxHeight);
+                    _settings.BoxHeight = Mathf.Max(0.01f, _settings.BoxHeight);
+                }
+                
+                if (EditorGUI.EndChangeCheck())
+                {
+                    SceneView.RepaintAll();
+                }
+                
+                EditorGUI.indentLevel--;
+            }
+
+            EditorGUILayout.Space(5);
+
+            // Masking
+            _maskingFoldout = EditorGUILayout.Foldout(_maskingFoldout, "Masking", true, EditorStyles.foldoutHeader);
+            if (_maskingFoldout)
+            {
+                EditorGUI.indentLevel++;
+                _settings.MaskTexture = (Texture2D)EditorGUILayout.ObjectField("Mask Texture", _settings.MaskTexture, typeof(Texture2D), false);
+                _settings.UseVertexColorMask = EditorGUILayout.Toggle("Use Vertex Color", _settings.UseVertexColorMask);
+                _settings.InvertMask = EditorGUILayout.Toggle("Invert Mask", _settings.InvertMask);
+                EditorGUI.indentLevel--;
+            }
+
+            EditorGUILayout.Space(5);
+
+            // Output
+            _outputFoldout = EditorGUILayout.Foldout(_outputFoldout, "Output", true, EditorStyles.foldoutHeader);
+            if (_outputFoldout)
+            {
+                EditorGUI.indentLevel++;
+                _settings.Resolution = EditorGUILayout.IntField("Resolution", _settings.Resolution);
+                _settings.Resolution = Mathf.Clamp(_settings.Resolution, 64, 8192);
+                
+                EditorGUILayout.BeginHorizontal();
+                _settings.SavePath = EditorGUILayout.TextField("Save Path", _settings.SavePath);
+                if (GUILayout.Button("...", GUILayout.Width(30)))
+                {
+                    string path = EditorUtility.OpenFolderPanel("Select Save Folder", "Assets", "");
+                    if (!string.IsNullOrEmpty(path))
+                    {
+                        if (path.StartsWith(Application.dataPath))
+                        {
+                            _settings.SavePath = "Assets" + path.Substring(Application.dataPath.Length);
+                        }
+                        else
+                        {
+                            _settings.SavePath = path;
+                        }
+                    }
+                }
+                EditorGUILayout.EndHorizontal();
+                EditorGUI.indentLevel--;
+            }
+
+            EditorGUILayout.Space(5);
+            
+            // Preview toggle
+            _previewEnabled = EditorGUILayout.Toggle("Realtime Preview", _previewEnabled);
             if (_previewEnabled)
             {
                 EditorGUI.indentLevel++;
@@ -137,29 +195,17 @@ namespace GradationTextureGenerator.UI
                 if (GUI.changed) SceneView.RepaintAll();
             }
 
-            EditorGUILayout.BeginHorizontal();
-            _settings.SavePath = EditorGUILayout.TextField("Save Path", _settings.SavePath);
-            if (GUILayout.Button("...", GUILayout.Width(30)))
-            {
-                string path = EditorUtility.OpenFolderPanel("Select Save Folder", "Assets", "");
-                if (!string.IsNullOrEmpty(path))
-                {
-                     if (path.StartsWith(Application.dataPath))
-                     {
-                         _settings.SavePath = "Assets" + path.Substring(Application.dataPath.Length);
-                     }
-                     else
-                     {
-                         _settings.SavePath = path;
-                     }
-                }
-            }
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.Space();
+            EditorGUILayout.Space(10);
+            
+            // Bake button
             if (GUILayout.Button("Bake & Save", GUILayout.Height(40)))
             {
                 BakeAndSave();
+            }
+            
+            if (gradientChanged)
+            {
+                SceneView.RepaintAll();
             }
         }
 
@@ -168,53 +214,44 @@ namespace GradationTextureGenerator.UI
             if (!_settings.IsToolActive) return;
             if (_settings.TargetRenderer == null) return;
             
-            Bounds bounds = _settings.TargetRenderer.bounds;
-            Vector3 center = bounds.center;
+            Mesh mesh = GetMesh(_settings.TargetRenderer);
+            if (mesh == null) return;
 
             // Preview
             if (_previewEnabled)
             {
-                Mesh mesh = GetMesh(_settings.TargetRenderer);
-                if (mesh != null)
-                {
-                    _preview.UpdatePreview(_settings, mesh, _settings.TargetRenderer.localToWorldMatrix);
-                }
+                _preview.UpdatePreview(_settings, mesh, _settings.TargetRenderer.localToWorldMatrix);
             }
 
-            // Handle
-            EditorGUI.BeginChangeCheck();
-            _sceneHandle.DrawHandle(center, _settings, _settings.TargetRenderer.transform);
-            if (EditorGUI.EndChangeCheck())
+            // Handle - returns what type of change was made
+            HandleChangeType changeType = _sceneHandle.DrawHandle(_settings, _settings.TargetRenderer.transform);
+            
+            if (changeType != HandleChangeType.None)
             {
-                // If handle changed direction, update range
-                if (_settings.AutoNormalize)
+                // Only refit to bounds when ROTATION changes and AutoNormalize is on
+                // Do NOT refit when position or height changes (user is manually adjusting)
+                if (_settings.AutoNormalize && (changeType & HandleChangeType.Rotation) != 0)
                 {
-                     Mesh mesh = GetMesh(_settings.TargetRenderer);
-                     if (mesh != null)
-                     {
-                        // Ensure readable
-                        MeshReadWriteEnabler.EnsureReadWriteEnabled(mesh);
-                        (_settings.MinRange, _settings.MaxRange) = _baker.CalculateNormalizeRange(mesh, _settings.GradientDirection);
-                     }
+                    MeshReadWriteEnabler.EnsureReadWriteEnabled(mesh);
+                    _settings.FitToMeshBounds(mesh, _settings.TargetRenderer.transform);
                 }
-                Repaint(); // Repaint Window
+                Repaint();
             }
         }
 
         private void BakeAndSave()
         {
-            FileLogger.Clear(); // Clear old logs
+            FileLogger.Clear();
             FileLogger.Log("[GradationBakerWindow] Bake & Save button clicked.");
+            
             Texture2D tex = _baker.Bake(_settings);
             if (tex != null)
             {
-                // Ensure directory
                 string dir = _settings.SavePath.Replace('\\', '/');
                 FileLogger.Log($"[GradationBakerWindow] SavePath setting: {dir}");
                 
                 string fullDirPath = dir;
                 
-                // If it starts with Assets, mapped to project root
                 if (dir.StartsWith("Assets"))
                 {
                     fullDirPath = Path.Combine(Application.dataPath, dir.Substring("Assets".Length).TrimStart('/'));
@@ -238,10 +275,13 @@ namespace GradationTextureGenerator.UI
                 
                 AssetDatabase.Refresh();
                 FileLogger.Log($"[GradationTextureGenerator] Saved to {fullPath}");
+                
+                EditorUtility.DisplayDialog("Success", $"Gradation texture saved to:\n{fullPath}", "OK");
             }
             else
             {
                 FileLogger.LogError("[GradationBakerWindow] Bake returned null.");
+                EditorUtility.DisplayDialog("Error", "Bake failed. Check the console for details.", "OK");
             }
         }
 

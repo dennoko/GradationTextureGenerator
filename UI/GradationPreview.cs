@@ -9,6 +9,7 @@ namespace GradationTextureGenerator.UI
         private const string ShaderPath = "Hidden/GradationTextureGenerator/Preview";
         private Material _previewMaterial;
         private Texture2D _lutTexture;
+        private Gradient _cachedGradient;
 
         public void UpdatePreview(GradationSettings settings, Mesh mesh, Matrix4x4 localToWorld)
         {
@@ -24,23 +25,30 @@ namespace GradationTextureGenerator.UI
                 _previewMaterial.hideFlags = HideFlags.HideAndDontSave;
             }
 
-            // Update LUT
-            // For performance, maybe only update when gradient changes?
-            // For now, update every frame for simplicity in "interactive" mode
+            // Update LUT only when gradient changes (optimization)
             UpdateLUT(settings.Gradient);
 
-            // Set Props
+            // Calculate world-to-box transformation matrix
+            Matrix4x4 boxMatrix = Matrix4x4.TRS(
+                settings.BoxCenter, 
+                settings.BoxRotation, 
+                new Vector3(GradationSettings.BoxWidth, settings.BoxHeight, GradationSettings.BoxDepth)
+            );
+            Matrix4x4 worldToBox = boxMatrix.inverse;
+
+            // Set shader properties
             _previewMaterial.SetTexture("_MainTex", _lutTexture);
+            _previewMaterial.SetMatrix("_WorldToBox", worldToBox);
+            _previewMaterial.SetMatrix("_ObjectToWorld", localToWorld);
+            _previewMaterial.SetFloat("_BoxHeight", settings.BoxHeight);
+            _previewMaterial.SetFloat("_Opacity", settings.PreviewOpacity);
+            
+            // Legacy properties for compatibility (shader will use new method primarily)
             _previewMaterial.SetVector("_Direction", settings.GradientDirection.normalized);
             _previewMaterial.SetFloat("_RangeMin", settings.MinRange);
             _previewMaterial.SetFloat("_RangeMax", settings.MaxRange);
-            _previewMaterial.SetFloat("_Opacity", settings.PreviewOpacity);
 
-            // Draw via Graphics
-            // DrawMesh draws immediately for the current camera.
-            // But usually this is called inside OnSceneGUI which is a Repaint event.
-            // However, Graphics.DrawMesh draws into the scene.
-            // Let's use pass 0
+            // Draw mesh with preview material
             if (_previewMaterial.SetPass(0))
             {
                 Graphics.DrawMeshNow(mesh, localToWorld);
@@ -56,10 +64,10 @@ namespace GradationTextureGenerator.UI
                 _lutTexture.hideFlags = HideFlags.HideAndDontSave;
             }
             
-            // Simple bake
+            // Bake gradient to LUT texture
             for (int i = 0; i < 256; i++)
             {
-                _lutTexture.SetPixel(i, 0, gradient.Evaluate((float)i/255f));
+                _lutTexture.SetPixel(i, 0, gradient.Evaluate((float)i / 255f));
             }
             _lutTexture.Apply();
         }

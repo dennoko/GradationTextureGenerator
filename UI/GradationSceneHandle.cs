@@ -4,157 +4,206 @@ using GradationTextureGenerator.Data;
 
 namespace GradationTextureGenerator.UI
 {
+    /// <summary>
+    /// Indicates what type of change was made via the scene handle
+    /// </summary>
+    [System.Flags]
+    public enum HandleChangeType
+    {
+        None = 0,
+        Rotation = 1,
+        Position = 2,
+        Height = 4
+    }
+    
     public class GradationSceneHandle
     {
-        private const string PROXY_NAME = "Gradation Handle [Temp]";
-        private const string MIN_HANDLE_NAME = "Min Range";
-        private const string MAX_HANDLE_NAME = "Max Range";
-        
-        private GameObject _proxyObject;
-        private GameObject _minHandle;
-        private GameObject _maxHandle;
-        
-        public void DrawHandle(Vector3 center, GradationSettings settings, Transform targetTransform)
+        private Quaternion _lastRotation;
+        private static readonly Color BoxColor = new Color(1f, 1f, 0f, 0.3f);
+        private static readonly Color BoxOutlineColor = new Color(1f, 1f, 0f, 0.8f);
+        private static readonly Color TopHandleColor = new Color(1f, 0.3f, 0.3f, 1f);
+        private static readonly Color BottomHandleColor = new Color(0.3f, 1f, 0.3f, 1f);
+
+        public HandleChangeType DrawHandle(GradationSettings settings, Transform targetTransform)
         {
-            Vector3 dir = settings.GradientDirection.normalized;
-            Vector3 objectOrigin = targetTransform != null ? targetTransform.position : center;
+            HandleChangeType changeType = HandleChangeType.None;
             
-            // Ensure Proxy Object exists
-            if (_proxyObject == null)
+            Vector3 center = settings.BoxCenter;
+            Quaternion rotation = settings.BoxRotation;
+            float halfHeight = settings.BoxHeight / 2f;
+            
+            Vector3 upDir = rotation * Vector3.up;
+            Vector3 topPos = center + upDir * halfHeight;
+            Vector3 bottomPos = center - upDir * halfHeight;
+            
+            float handleSize = HandleUtility.GetHandleSize(center);
+
+            // 1. Rotation Handle at center
+            EditorGUI.BeginChangeCheck();
+            Quaternion newRotation = Handles.RotationHandle(rotation, center);
+            if (EditorGUI.EndChangeCheck())
             {
-                _proxyObject = GameObject.Find(PROXY_NAME);
-                
-                if (_proxyObject == null)
-                {
-                    _proxyObject = new GameObject(PROXY_NAME);
-                    _proxyObject.hideFlags = HideFlags.DontSave;
-                }
+                Undo.RecordObject(targetTransform, "Rotate Gradation Box");
+                settings.BoxRotation = newRotation;
+                changeType |= HandleChangeType.Rotation;
             }
-            
-            // Ensure Min Handle exists (child of proxy)
-            if (_minHandle == null)
+
+            // 2. Position Handle at center
+            EditorGUI.BeginChangeCheck();
+            Vector3 newCenter = Handles.PositionHandle(center, rotation);
+            if (EditorGUI.EndChangeCheck())
             {
-                var existing = _proxyObject.transform.Find(MIN_HANDLE_NAME);
-                if (existing != null)
-                {
-                    _minHandle = existing.gameObject;
-                }
-                else
-                {
-                    _minHandle = new GameObject(MIN_HANDLE_NAME);
-                    _minHandle.transform.SetParent(_proxyObject.transform);
-                    _minHandle.hideFlags = HideFlags.DontSave;
-                }
+                Undo.RecordObject(targetTransform, "Move Gradation Box");
+                settings.BoxCenter = newCenter;
+                changeType |= HandleChangeType.Position;
             }
-            
-            // Ensure Max Handle exists (child of proxy)
-            if (_maxHandle == null)
+
+            // 3. Top height slider (Max)
+            Handles.color = TopHandleColor;
+            EditorGUI.BeginChangeCheck();
+            Vector3 newTopPos = Handles.Slider(topPos, upDir, handleSize * 0.15f, Handles.ConeHandleCap, 0f);
+            if (EditorGUI.EndChangeCheck())
             {
-                var existing = _proxyObject.transform.Find(MAX_HANDLE_NAME);
-                if (existing != null)
+                Undo.RecordObject(targetTransform, "Adjust Gradation Top");
+                // Calculate new height while keeping bottom fixed
+                float newTopDistance = Vector3.Dot(newTopPos - bottomPos, upDir);
+                if (newTopDistance > 0.01f)
                 {
-                    _maxHandle = existing.gameObject;
-                }
-                else
-                {
-                    _maxHandle = new GameObject(MAX_HANDLE_NAME);
-                    _maxHandle.transform.SetParent(_proxyObject.transform);
-                    _maxHandle.hideFlags = HideFlags.DontSave;
+                    settings.BoxHeight = newTopDistance;
+                    settings.BoxCenter = bottomPos + upDir * (newTopDistance / 2f);
+                    changeType |= HandleChangeType.Height;
                 }
             }
 
-            // === Sync Proxy -> Settings (User moved handles in Scene) ===
-            
-            // Direction from proxy rotation
-            if (_proxyObject.transform.hasChanged)
+            // 4. Bottom height slider (Min)
+            Handles.color = BottomHandleColor;
+            EditorGUI.BeginChangeCheck();
+            Vector3 newBottomPos = Handles.Slider(bottomPos, -upDir, handleSize * 0.15f, Handles.ConeHandleCap, 0f);
+            if (EditorGUI.EndChangeCheck())
             {
-                settings.GradientDirection = _proxyObject.transform.up;
-                _proxyObject.transform.hasChanged = false;
+                Undo.RecordObject(targetTransform, "Adjust Gradation Bottom");
+                // Calculate new height while keeping top fixed
+                float newBottomDistance = Vector3.Dot(topPos - newBottomPos, upDir);
+                if (newBottomDistance > 0.01f)
+                {
+                    settings.BoxHeight = newBottomDistance;
+                    settings.BoxCenter = newBottomPos + upDir * (newBottomDistance / 2f);
+                    changeType |= HandleChangeType.Height;
+                }
             }
+
+            // 5. Draw cube visualization
+            DrawCubeVisualization(settings);
             
-            // Min Range from min handle position
-            if (_minHandle.transform.hasChanged)
-            {
-                Vector3 minWorldPos = _minHandle.transform.position;
-                Vector3 delta = minWorldPos - objectOrigin;
-                settings.MinRange = Vector3.Dot(delta, dir);
-                _minHandle.transform.hasChanged = false;
-            }
+            // 6. Draw labels
+            DrawLabels(settings, topPos, bottomPos, handleSize);
             
-            // Max Range from max handle position
-            if (_maxHandle.transform.hasChanged)
-            {
-                Vector3 maxWorldPos = _maxHandle.transform.position;
-                Vector3 delta = maxWorldPos - objectOrigin;
-                settings.MaxRange = Vector3.Dot(delta, dir);
-                _maxHandle.transform.hasChanged = false;
-            }
+            return changeType;
+        }
+
+        private void DrawCubeVisualization(GradationSettings settings)
+        {
+            Vector3 center = settings.BoxCenter;
+            Quaternion rotation = settings.BoxRotation;
+            Vector3 size = new Vector3(GradationSettings.BoxWidth, settings.BoxHeight, GradationSettings.BoxDepth);
             
-            // === Sync Settings -> Proxy (UI changed or first run) ===
+            Matrix4x4 oldMatrix = Handles.matrix;
+            Handles.matrix = Matrix4x4.TRS(center, rotation, Vector3.one);
             
-            // Proxy position and rotation
-            _proxyObject.transform.position = center;
-            Vector3 currentUp = _proxyObject.transform.up;
-            if (Vector3.Dot(currentUp, dir) < 0.999f)
-            {
-                _proxyObject.transform.rotation = Quaternion.FromToRotation(Vector3.up, dir);
-            }
+            // Draw semi-transparent cube
+            Handles.color = BoxColor;
+            Handles.DrawWireCube(Vector3.zero, size);
             
-            // Min/Max handle positions (only if not being dragged)
-            Vector3 expectedMinPos = objectOrigin + dir * settings.MinRange;
-            Vector3 expectedMaxPos = objectOrigin + dir * settings.MaxRange;
+            // Draw solid outline
+            Handles.color = BoxOutlineColor;
+            DrawBoxEdges(size);
             
-            if (!_minHandle.transform.hasChanged)
-            {
-                _minHandle.transform.position = expectedMinPos;
-            }
-            if (!_maxHandle.transform.hasChanged)
-            {
-                _maxHandle.transform.position = expectedMaxPos;
-            }
-            
-            // === Draw Visualization ===
-            float size = HandleUtility.GetHandleSize(center);
-            
-            // Direction Arrow
-            Handles.color = Color.cyan;
-            Handles.ArrowHandleCap(0, center, Quaternion.LookRotation(dir), size * 1.5f, EventType.Repaint);
-            
-            // Visual discs at min/max positions
-            Vector3 minPos = _minHandle.transform.position;
-            Vector3 maxPos = _maxHandle.transform.position;
-            
-            Handles.color = new Color(0.2f, 0.8f, 0.2f, 0.4f);
-            Handles.DrawSolidDisc(minPos, dir, size * 0.3f);
-            Handles.color = new Color(0.8f, 0.2f, 0.2f, 0.4f);
-            Handles.DrawSolidDisc(maxPos, dir, size * 0.3f);
-            
-            // Line connecting min to max
+            // Draw gradient direction arrow
             Handles.color = Color.yellow;
-            Handles.DrawLine(minPos, maxPos);
+            float arrowLength = settings.BoxHeight * 0.3f;
+            Handles.ArrowHandleCap(0, Vector3.zero, Quaternion.LookRotation(Vector3.up), arrowLength, EventType.Repaint);
             
-            // Labels
-            GUIStyle style = new GUIStyle();
-            style.normal.textColor = Color.green;
-            Handles.Label(minPos + Vector3.up * size * 0.25f, $"Min: {settings.MinRange:F2}", style);
-            style.normal.textColor = Color.red;
-            Handles.Label(maxPos + Vector3.up * size * 0.25f, $"Max: {settings.MaxRange:F2}", style);
+            Handles.matrix = oldMatrix;
+        }
+
+        private void DrawBoxEdges(Vector3 size)
+        {
+            float hw = size.x / 2f;
+            float hh = size.y / 2f;
+            float hd = size.z / 2f;
+            
+            // Top face
+            Vector3 t0 = new Vector3(-hw, hh, -hd);
+            Vector3 t1 = new Vector3(hw, hh, -hd);
+            Vector3 t2 = new Vector3(hw, hh, hd);
+            Vector3 t3 = new Vector3(-hw, hh, hd);
+            
+            // Bottom face
+            Vector3 b0 = new Vector3(-hw, -hh, -hd);
+            Vector3 b1 = new Vector3(hw, -hh, -hd);
+            Vector3 b2 = new Vector3(hw, -hh, hd);
+            Vector3 b3 = new Vector3(-hw, -hh, hd);
+            
+            // Top face edges
+            Handles.DrawLine(t0, t1);
+            Handles.DrawLine(t1, t2);
+            Handles.DrawLine(t2, t3);
+            Handles.DrawLine(t3, t0);
+            
+            // Bottom face edges
+            Handles.DrawLine(b0, b1);
+            Handles.DrawLine(b1, b2);
+            Handles.DrawLine(b2, b3);
+            Handles.DrawLine(b3, b0);
+            
+            // Vertical edges
+            Handles.DrawLine(t0, b0);
+            Handles.DrawLine(t1, b1);
+            Handles.DrawLine(t2, b2);
+            Handles.DrawLine(t3, b3);
+        }
+
+        private void DrawLabels(GradationSettings settings, Vector3 topPos, Vector3 bottomPos, float handleSize)
+        {
+            GUIStyle labelStyle = new GUIStyle
+            {
+                normal = { textColor = Color.white },
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 12,
+                fontStyle = FontStyle.Bold
+            };
+            
+            // Add background for better visibility
+            GUIStyle bgStyle = new GUIStyle(labelStyle)
+            {
+                normal = { background = MakeTexture(1, 1, new Color(0, 0, 0, 0.5f)) }
+            };
+            
+            Vector3 offset = settings.BoxRotation * Vector3.right * handleSize * 0.5f;
+            Handles.Label(topPos + offset, $"Max (1.0)", bgStyle);
+            Handles.Label(bottomPos + offset, $"Min (0.0)", bgStyle);
+            
+            // Height label
+            Vector3 midPoint = (topPos + bottomPos) / 2f + settings.BoxRotation * Vector3.right * handleSize * 0.8f;
+            Handles.Label(midPoint, $"Height: {settings.BoxHeight:F2}", bgStyle);
+        }
+        
+        private Texture2D MakeTexture(int width, int height, Color color)
+        {
+            Color[] pixels = new Color[width * height];
+            for (int i = 0; i < pixels.Length; i++)
+                pixels[i] = color;
+            
+            Texture2D texture = new Texture2D(width, height);
+            texture.SetPixels(pixels);
+            texture.Apply();
+            texture.hideFlags = HideFlags.HideAndDontSave;
+            return texture;
         }
 
         public void Cleanup()
         {
-            if (_minHandle != null) Object.DestroyImmediate(_minHandle);
-            if (_maxHandle != null) Object.DestroyImmediate(_maxHandle);
-            if (_proxyObject != null) Object.DestroyImmediate(_proxyObject);
-            
-            _minHandle = null;
-            _maxHandle = null;
-            _proxyObject = null;
-            
-            // Double check search
-            var obj = GameObject.Find(PROXY_NAME);
-            if (obj != null) Object.DestroyImmediate(obj);
+            // No persistent objects to cleanup
         }
     }
 }
-
