@@ -23,7 +23,10 @@ Shader "Hidden/GradationTextureGenerator/Bake"
             struct appdata
             {
                 float4 vertex : POSITION;
-                float2 uv : TEXCOORD0;
+                float2 uv0 : TEXCOORD0;
+                float2 uv1 : TEXCOORD1;
+                float2 uv2 : TEXCOORD2;
+                float2 uv3 : TEXCOORD3;
                 float4 color : COLOR;
             };
 
@@ -39,8 +42,11 @@ Shader "Hidden/GradationTextureGenerator/Bake"
             sampler2D _MaskTex; // Mask Texture (optional)
             
             // Cube-based parameters
-            float4x4 _WorldToBox;     // World to box local space transform
-            float4x4 _ObjectToWorld;  // Object to world transform (identity for bake)
+            float4x4 _WorldToBox;
+            float4x4 _ObjectToWorld;
+            
+            // UV Channel selection
+            int _UVChannel;
             
             int _UseMaskTexture;
             int _UseVertexColorMask;
@@ -50,15 +56,19 @@ Shader "Hidden/GradationTextureGenerator/Bake"
             {
                 v2f o;
                 
-                // UV to Clip Space mapping
-                float2 uvClip = v.uv * 2.0 - 1.0;
+                // Select UV channel
+                float2 selectedUV = v.uv0;
+                if (_UVChannel == 1) selectedUV = v.uv1;
+                else if (_UVChannel == 2) selectedUV = v.uv2;
+                else if (_UVChannel == 3) selectedUV = v.uv3;
                 
-                // Flip Y to fix upside down issue
+                // UV to Clip Space mapping
+                float2 uvClip = selectedUV * 2.0 - 1.0;
                 o.vertex = float4(uvClip.x, -uvClip.y, 0, 1);
 
                 o.objectPos = v.vertex.xyz;
                 o.color = v.color;
-                o.uv = v.uv;
+                o.uv = selectedUV;
                 return o;
             }
 
@@ -69,7 +79,6 @@ Shader "Hidden/GradationTextureGenerator/Bake"
                 float3 boxLocalPos = mul(_WorldToBox, float4(worldPos, 1.0)).xyz;
                 
                 // In box local space, Y goes from -0.5 to 0.5 (normalized box)
-                // Map to 0-1 range for gradient sampling
                 float t = saturate(boxLocalPos.y + 0.5);
                 
                 // Sample Gradient

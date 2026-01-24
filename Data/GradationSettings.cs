@@ -1,16 +1,35 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 namespace GradationTextureGenerator.Data
 {
     [System.Serializable]
+    public class MeshEntry
+    {
+        public Renderer SourceRenderer;
+        public GameObject WorkMeshObject;
+        
+        public Renderer ActiveRenderer => WorkMeshObject != null 
+            ? WorkMeshObject.GetComponent<Renderer>() 
+            : SourceRenderer;
+            
+        public bool HasWorkMesh => WorkMeshObject != null;
+    }
+
+    [System.Serializable]
     public class GradationSettings
     {
-        public Renderer TargetRenderer;
+        // Multiple mesh support
+        public List<MeshEntry> MeshEntries = new List<MeshEntry>();
+        
         public Gradient Gradient = new Gradient();
         public Texture2D MaskTexture;
         public bool UseVertexColorMask = false;
         public bool InvertMask = false;
         public int Resolution = 1024;
+        
+        // UV Channel selection (0-3)
+        public int UVChannel = 0;
         
         // Cube-based gradation control
         public Vector3 BoxCenter = Vector3.zero;
@@ -35,7 +54,20 @@ namespace GradationTextureGenerator.Data
         public string SavePath = "Assets/";
         
         /// <summary>
-        /// Fits the box to the mesh bounds along the current gradient direction
+        /// Gets the first valid renderer for Box fitting
+        /// </summary>
+        public Renderer GetPrimaryRenderer()
+        {
+            foreach (var entry in MeshEntries)
+            {
+                if (entry.ActiveRenderer != null)
+                    return entry.ActiveRenderer;
+            }
+            return null;
+        }
+        
+        /// <summary>
+        /// Fits the box to the combined mesh bounds of all entries
         /// </summary>
         public void FitToMeshBounds(Mesh mesh, Transform transform)
         {
@@ -50,7 +82,6 @@ namespace GradationTextureGenerator.Data
             float max = float.MinValue;
             Vector3 worldCenter = Vector3.zero;
             
-            // Calculate bounds in object space along direction
             foreach (var v in vertices)
             {
                 Vector3 worldV = transform != null ? transform.TransformPoint(v) : v;
@@ -61,20 +92,76 @@ namespace GradationTextureGenerator.Data
             }
             worldCenter /= vertices.Length;
             
-            // Prevent zero height
             if (Mathf.Abs(max - min) < 0.0001f) max = min + 1.0f;
             
-            // Set box height and center
             BoxHeight = max - min;
             
-            // Position box center at the midpoint along the direction
             float midT = (min + max) / 2f;
             BoxCenter = dir * midT;
             
-            // Adjust center to be on the mesh center projected onto the gradient axis
             Vector3 projectedCenter = Vector3.Project(worldCenter, dir);
             Vector3 perpendicularOffset = worldCenter - projectedCenter;
             BoxCenter = dir * midT + perpendicularOffset;
+        }
+
+        /// <summary>
+        /// Fits box to all mesh entries combined bounds
+        /// </summary>
+        public void FitToAllMeshBounds()
+        {
+            if (MeshEntries.Count == 0) return;
+            
+            Vector3 dir = GradientDirection.normalized;
+            float globalMin = float.MaxValue;
+            float globalMax = float.MinValue;
+            Vector3 globalCenter = Vector3.zero;
+            int totalVertices = 0;
+            
+            foreach (var entry in MeshEntries)
+            {
+                Renderer renderer = entry.ActiveRenderer;
+                if (renderer == null) continue;
+                
+                Mesh mesh = GetMesh(renderer);
+                if (mesh == null) continue;
+                
+                Vector3[] vertices = mesh.vertices;
+                Transform transform = renderer.transform;
+                
+                foreach (var v in vertices)
+                {
+                    Vector3 worldV = transform.TransformPoint(v);
+                    globalCenter += worldV;
+                    totalVertices++;
+                    
+                    float t = Vector3.Dot(worldV, dir);
+                    if (t < globalMin) globalMin = t;
+                    if (t > globalMax) globalMax = t;
+                }
+            }
+            
+            if (totalVertices == 0) return;
+            globalCenter /= totalVertices;
+            
+            if (Mathf.Abs(globalMax - globalMin) < 0.0001f) globalMax = globalMin + 1.0f;
+            
+            BoxHeight = globalMax - globalMin;
+            
+            float midT = (globalMin + globalMax) / 2f;
+            Vector3 projectedCenter = Vector3.Project(globalCenter, dir);
+            Vector3 perpendicularOffset = globalCenter - projectedCenter;
+            BoxCenter = dir * midT + perpendicularOffset;
+        }
+
+        private static Mesh GetMesh(Renderer renderer)
+        {
+            if (renderer is SkinnedMeshRenderer smr) return smr.sharedMesh;
+            if (renderer is MeshRenderer mr)
+            {
+                MeshFilter mf = mr.GetComponent<MeshFilter>();
+                return mf ? mf.sharedMesh : null;
+            }
+            return null;
         }
     }
 }

@@ -9,11 +9,13 @@ namespace GradationTextureGenerator.UI
         private const string ShaderPath = "Hidden/GradationTextureGenerator/Preview";
         private Material _previewMaterial;
         private Texture2D _lutTexture;
-        private Gradient _cachedGradient;
 
-        public void UpdatePreview(GradationSettings settings, Mesh mesh, Matrix4x4 localToWorld)
+        public void UpdatePreview(GradationSettings settings, Renderer renderer, Matrix4x4 localToWorld)
         {
             if (Event.current.type != EventType.Repaint) return;
+            if (renderer == null) return;
+            
+            Mesh mesh = GetMesh(renderer);
             if (mesh == null) return;
             
             // Lazy Init Material
@@ -25,7 +27,7 @@ namespace GradationTextureGenerator.UI
                 _previewMaterial.hideFlags = HideFlags.HideAndDontSave;
             }
 
-            // Update LUT only when gradient changes (optimization)
+            // Update LUT
             UpdateLUT(settings.Gradient);
 
             // Calculate world-to-box transformation matrix
@@ -42,16 +44,25 @@ namespace GradationTextureGenerator.UI
             _previewMaterial.SetMatrix("_ObjectToWorld", localToWorld);
             _previewMaterial.SetFloat("_BoxHeight", settings.BoxHeight);
             _previewMaterial.SetFloat("_Opacity", settings.PreviewOpacity);
-            
-            // Legacy properties for compatibility (shader will use new method primarily)
-            _previewMaterial.SetVector("_Direction", settings.GradientDirection.normalized);
-            _previewMaterial.SetFloat("_RangeMin", settings.MinRange);
-            _previewMaterial.SetFloat("_RangeMax", settings.MaxRange);
 
             // Draw mesh with preview material
             if (_previewMaterial.SetPass(0))
             {
                 Graphics.DrawMeshNow(mesh, localToWorld);
+            }
+        }
+
+        /// <summary>
+        /// Updates preview for all mesh entries
+        /// </summary>
+        public void UpdatePreviewAll(GradationSettings settings)
+        {
+            foreach (var entry in settings.MeshEntries)
+            {
+                Renderer renderer = entry.ActiveRenderer;
+                if (renderer == null) continue;
+                
+                UpdatePreview(settings, renderer, renderer.localToWorldMatrix);
             }
         }
         
@@ -64,12 +75,22 @@ namespace GradationTextureGenerator.UI
                 _lutTexture.hideFlags = HideFlags.HideAndDontSave;
             }
             
-            // Bake gradient to LUT texture
             for (int i = 0; i < 256; i++)
             {
                 _lutTexture.SetPixel(i, 0, gradient.Evaluate((float)i / 255f));
             }
             _lutTexture.Apply();
+        }
+
+        private Mesh GetMesh(Renderer renderer)
+        {
+            if (renderer is SkinnedMeshRenderer smr) return smr.sharedMesh;
+            if (renderer is MeshRenderer mr)
+            {
+                MeshFilter mf = mr.GetComponent<MeshFilter>();
+                return mf ? mf.sharedMesh : null;
+            }
+            return null;
         }
 
         public void Cleanup()

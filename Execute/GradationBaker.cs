@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 using GradationTextureGenerator.Data;
 
 namespace GradationTextureGenerator.Execute
@@ -7,16 +8,37 @@ namespace GradationTextureGenerator.Execute
     {
         private const string ShaderPath = "Hidden/GradationTextureGenerator/Bake";
 
-        public Texture2D Bake(GradationSettings settings)
+        /// <summary>
+        /// Bakes gradation textures for all mesh entries
+        /// </summary>
+        public List<BakeResult> BakeAll(GradationSettings settings)
         {
-            FileLogger.Log("[GradationBaker] Starting Bake...");
-            if (settings.TargetRenderer == null)
+            var results = new List<BakeResult>();
+            
+            foreach (var entry in settings.MeshEntries)
             {
-                FileLogger.LogError("[GradationBaker] Target Renderer is null.");
-                return null;
+                Renderer renderer = entry.ActiveRenderer;
+                if (renderer == null) continue;
+                
+                Texture2D tex = Bake(settings, renderer);
+                results.Add(new BakeResult
+                {
+                    Texture = tex,
+                    RendererName = entry.SourceRenderer != null ? entry.SourceRenderer.name : "Unknown"
+                });
             }
+            
+            return results;
+        }
 
-            Mesh mesh = GetMesh(settings.TargetRenderer);
+        /// <summary>
+        /// Bakes a single renderer to texture
+        /// </summary>
+        public Texture2D Bake(GradationSettings settings, Renderer renderer)
+        {
+            FileLogger.Log($"[GradationBaker] Starting Bake for {renderer.name}...");
+            
+            Mesh mesh = GetMesh(renderer);
             if (mesh == null)
             {
                 FileLogger.LogError("[GradationBaker] Mesh not found.");
@@ -24,16 +46,14 @@ namespace GradationTextureGenerator.Execute
             }
             FileLogger.Log($"[GradationBaker] Target Mesh: {mesh.name}, Vertex Count: {mesh.vertexCount}");
 
-            // Ensure Read/Write to access vertices
             MeshReadWriteEnabler.EnsureReadWriteEnabled(mesh);
 
             Shader shader = Shader.Find(ShaderPath);
             if (shader == null)
             {
-                FileLogger.LogError($"[GradationBaker] Shader not found at {ShaderPath}. Ensure the shader file is imported.");
+                FileLogger.LogError($"[GradationBaker] Shader not found at {ShaderPath}.");
                 return null;
             }
-            FileLogger.Log($"[GradationBaker] Shader found: {shader.name}");
             Material mat = new Material(shader);
 
             // Generate LUT
@@ -47,15 +67,15 @@ namespace GradationTextureGenerator.Execute
                 new Vector3(GradationSettings.BoxWidth, settings.BoxHeight, GradationSettings.BoxDepth)
             );
             Matrix4x4 worldToBox = boxMatrix.inverse;
-            
-            // For baking, we use object space directly (identity transform)
-            // But we need to account for the renderer's transform
-            Matrix4x4 objectToWorld = settings.TargetRenderer.localToWorldMatrix;
+            Matrix4x4 objectToWorld = renderer.localToWorldMatrix;
 
             mat.SetMatrix("_WorldToBox", worldToBox);
             mat.SetMatrix("_ObjectToWorld", objectToWorld);
+            
+            // UV Channel
+            mat.SetInt("_UVChannel", settings.UVChannel);
 
-            FileLogger.Log($"[GradationBaker] Box Center: {settings.BoxCenter}, Height: {settings.BoxHeight}");
+            FileLogger.Log($"[GradationBaker] UV Channel: {settings.UVChannel}, Box Height: {settings.BoxHeight}");
 
             // Mask settings
             if (settings.MaskTexture != null)
@@ -73,7 +93,6 @@ namespace GradationTextureGenerator.Execute
 
             // Setup RenderTexture
             int res = settings.Resolution;
-            FileLogger.Log($"[GradationBaker] Resolution: {res}");
             RenderTexture rt = RenderTexture.GetTemporary(res, res, 0, RenderTextureFormat.ARGB32);
             RenderTexture.active = rt;
             GL.Clear(true, true, Color.clear);
@@ -81,7 +100,6 @@ namespace GradationTextureGenerator.Execute
             // Draw Mesh
             if (mat.SetPass(0))
             {
-                FileLogger.Log("[GradationBaker] Drawing Mesh Now...");
                 Graphics.DrawMeshNow(mesh, Matrix4x4.identity);
             }
             else
@@ -93,7 +111,7 @@ namespace GradationTextureGenerator.Execute
             Texture2D result = new Texture2D(res, res, TextureFormat.ARGB32, false);
             result.ReadPixels(new Rect(0, 0, res, res), 0, 0);
             result.Apply();
-            FileLogger.Log("[GradationBaker] ReadPixels finished.");
+            FileLogger.Log("[GradationBaker] Bake completed.");
 
             // Cleanup
             RenderTexture.active = null;
@@ -115,14 +133,6 @@ namespace GradationTextureGenerator.Execute
             return null;
         }
 
-        /// <summary>
-        /// Fits the box settings to mesh bounds along the current gradient direction
-        /// </summary>
-        public void FitBoxToMesh(GradationSettings settings, Mesh mesh, Transform transform)
-        {
-            settings.FitToMeshBounds(mesh, transform);
-        }
-
         private Texture2D CreateGradientLUT(Gradient gradient)
         {
             int width = 256;
@@ -139,5 +149,11 @@ namespace GradationTextureGenerator.Execute
             tex.Apply();
             return tex;
         }
+    }
+
+    public class BakeResult
+    {
+        public Texture2D Texture;
+        public string RendererName;
     }
 }

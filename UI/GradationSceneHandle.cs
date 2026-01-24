@@ -43,17 +43,18 @@ namespace GradationTextureGenerator.UI
             Quaternion newRotation = Handles.RotationHandle(rotation, center);
             if (EditorGUI.EndChangeCheck())
             {
-                Undo.RecordObject(targetTransform, "Rotate Gradation Box");
+                if (targetTransform != null) Undo.RecordObject(targetTransform, "Rotate Gradation Box");
                 settings.BoxRotation = newRotation;
                 changeType |= HandleChangeType.Rotation;
             }
+
 
             // 2. Position Handle at center
             EditorGUI.BeginChangeCheck();
             Vector3 newCenter = Handles.PositionHandle(center, rotation);
             if (EditorGUI.EndChangeCheck())
             {
-                Undo.RecordObject(targetTransform, "Move Gradation Box");
+                if (targetTransform != null) Undo.RecordObject(targetTransform, "Move Gradation Box");
                 settings.BoxCenter = newCenter;
                 changeType |= HandleChangeType.Position;
             }
@@ -64,7 +65,7 @@ namespace GradationTextureGenerator.UI
             Vector3 newTopPos = Handles.Slider(topPos, upDir, handleSize * 0.15f, Handles.ConeHandleCap, 0f);
             if (EditorGUI.EndChangeCheck())
             {
-                Undo.RecordObject(targetTransform, "Adjust Gradation Top");
+                if (targetTransform != null) Undo.RecordObject(targetTransform, "Adjust Gradation Top");
                 // Calculate new height while keeping bottom fixed
                 float newTopDistance = Vector3.Dot(newTopPos - bottomPos, upDir);
                 if (newTopDistance > 0.01f)
@@ -81,7 +82,7 @@ namespace GradationTextureGenerator.UI
             Vector3 newBottomPos = Handles.Slider(bottomPos, -upDir, handleSize * 0.15f, Handles.ConeHandleCap, 0f);
             if (EditorGUI.EndChangeCheck())
             {
-                Undo.RecordObject(targetTransform, "Adjust Gradation Bottom");
+                if (targetTransform != null) Undo.RecordObject(targetTransform, "Adjust Gradation Bottom");
                 // Calculate new height while keeping top fixed
                 float newBottomDistance = Vector3.Dot(topPos - newBottomPos, upDir);
                 if (newBottomDistance > 0.01f)

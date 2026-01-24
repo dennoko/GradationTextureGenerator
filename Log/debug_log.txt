@@ -10,3 +10,5 @@
 [2026-01-24 17:21:19] [GradationBakerWindow] Full Directory Path: C:/Users/dennoko/AppData/Local/VRChatCreatorCompanion/VRChatProjects/Unity_extension_development/Assets
 [2026-01-24 17:21:19] [GradationBakerWindow] Writing file to: C:/Users/dennoko/AppData/Local/VRChatCreatorCompanion/VRChatProjects/Unity_extension_development/Assets/Gradation_ModsCoat [WorkCopy]_20260124172119.png
 [2026-01-24 17:21:20] [GradationTextureGenerator] Saved to C:/Users/dennoko/AppData/Local/VRChatCreatorCompanion/VRChatProjects/Unity_extension_development/Assets/Gradation_ModsCoat [WorkCopy]_20260124172119.png
+[2026-01-24 17:55:26] [WorkMeshManager] Created work mesh: [GradGen_Work] ModsCoat
+[2026-01-24 17:57:53] [WorkMeshManager] Deleted work mesh: [GradGen_Work] ModsCoat
