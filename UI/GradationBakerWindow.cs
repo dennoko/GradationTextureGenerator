@@ -300,7 +300,8 @@ namespace GradationBaker.UI
                 Vector3 euler = _settings.BoxRotation.eulerAngles;
                 euler = EditorGUILayout.Vector3Field(L("rotation"), euler);
                 
-                if (GUILayout.Button(L("reset"), GUILayout.Width(50)))
+                bool resetClicked = GUILayout.Button(L("reset"), GUILayout.Width(50));
+                if (resetClicked)
                 {
                     _settings.BoxRotation = Quaternion.identity;
                     SceneView.RepaintAll();
@@ -308,6 +309,8 @@ namespace GradationBaker.UI
                 }
                 EditorGUILayout.EndHorizontal();
                 
+                if (resetClicked) return; // Skip updating from fields this frame to prevent overwriting with old values
+
                 float height = EditorGUILayout.FloatField(L("height"), _settings.BoxHeight);
                 
                 if (EditorGUI.EndChangeCheck())
