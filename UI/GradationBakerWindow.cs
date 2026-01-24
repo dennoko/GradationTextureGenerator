@@ -230,20 +230,21 @@ namespace GradationTextureGenerator.UI
                 EditorGUILayout.Space(3);
                 
                 EditorGUI.BeginChangeCheck();
-                _settings.BoxCenter = EditorGUILayout.Vector3Field(L("center"), _settings.BoxCenter);
+                Vector3 center = EditorGUILayout.Vector3Field(L("center"), _settings.BoxCenter);
+                _settings.BoxCenter = RoundVector3(center, 2);
                 
                 EditorGUILayout.BeginHorizontal();
                 Vector3 euler = _settings.BoxRotation.eulerAngles;
                 euler = EditorGUILayout.Vector3Field(L("rotation"), euler);
-                _settings.BoxRotation = Quaternion.Euler(euler);
+                _settings.BoxRotation = Quaternion.Euler(RoundVector3(euler, 2));
                 if (GUILayout.Button(L("reset"), GUILayout.Width(50)))
                 {
                     _settings.BoxRotation = Quaternion.identity;
                 }
                 EditorGUILayout.EndHorizontal();
                 
-                _settings.BoxHeight = EditorGUILayout.FloatField(L("height"), _settings.BoxHeight);
-                _settings.BoxHeight = Mathf.Max(0.01f, _settings.BoxHeight);
+                float height = EditorGUILayout.FloatField(L("height"), _settings.BoxHeight);
+                _settings.BoxHeight = Mathf.Max(0.01f, Mathf.Round(height * 100f) / 100f);
                 
                 if (EditorGUI.EndChangeCheck())
                 {
@@ -795,6 +796,19 @@ namespace GradationTextureGenerator.UI
             
             SceneView.RepaintAll();
             FileLogger.Log($"[GradationBakerWindow] Gradient loaded from: {path}");
+        }
+
+        /// <summary>
+        /// Rounds a Vector3 to the specified number of decimal places
+        /// </summary>
+        private Vector3 RoundVector3(Vector3 v, int decimals)
+        {
+            float multiplier = Mathf.Pow(10f, decimals);
+            return new Vector3(
+                Mathf.Round(v.x * multiplier) / multiplier,
+                Mathf.Round(v.y * multiplier) / multiplier,
+                Mathf.Round(v.z * multiplier) / multiplier
+            );
         }
 
         /// <summary>
