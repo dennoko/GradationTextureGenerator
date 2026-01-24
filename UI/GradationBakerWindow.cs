@@ -673,6 +673,23 @@ namespace GradationTextureGenerator.UI
             File.WriteAllBytes(fullPath, bytes);
             AssetDatabase.Refresh();
             
+            // Enable Read/Write on the saved texture
+            string assetPath = "Assets" + fullPath.Substring(Application.dataPath.Length);
+            TextureImporter importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
+            if (importer != null)
+            {
+                importer.isReadable = true;
+                importer.SaveAndReimport();
+            }
+            
+            // Highlight saved file in Project tab
+            Object savedAsset = AssetDatabase.LoadAssetAtPath<Object>(assetPath);
+            if (savedAsset != null)
+            {
+                EditorGUIUtility.PingObject(savedAsset);
+                Selection.activeObject = savedAsset;
+            }
+            
             FileLogger.Log($"[GradationBakerWindow] Gradient saved to: {fullPath}");
         }
 
