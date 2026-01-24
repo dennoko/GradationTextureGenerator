@@ -141,7 +141,8 @@ namespace GradationTextureGenerator.Localization
         }
 
         /// <summary>
-        /// Draw language selector dropdown and return true if changed
+        /// Draw language toggle checkbox and return true if changed
+        /// Shows "Enable English Mode" when in Japanese, "英語表記を有効化" when in English
         /// </summary>
         public static bool DrawLanguageSelector()
         {
@@ -149,12 +150,17 @@ namespace GradationTextureGenerator.Localization
             
             EditorGUI.BeginChangeCheck();
             
-            string[] options = { "日本語", "English" };
-            int selected = EditorGUILayout.Popup((int)_currentLanguage, options, GUILayout.Width(80));
+            // Show opposite language label for intuitive switching
+            string label = _currentLanguage == Language.Japanese 
+                ? "Enable English Mode" 
+                : "英語表記を有効化";
             
-            if (EditorGUI.EndChangeCheck())
+            bool isEnglish = _currentLanguage == Language.English;
+            bool newIsEnglish = EditorGUILayout.ToggleLeft(label, isEnglish, GUILayout.Width(140));
+            
+            if (EditorGUI.EndChangeCheck() && newIsEnglish != isEnglish)
             {
-                SetLanguage((Language)selected);
+                SetLanguage(newIsEnglish ? Language.English : Language.Japanese);
                 return true;
             }
             

@@ -64,7 +64,7 @@ namespace GradationTextureGenerator.Data
         public float PreviewOpacity = 0.5f;
 
         // Output Settings
-        public string SavePath = "Assets/GeneratedGradation/";
+        public string SavePath = "Assets/GeneratedGradation/output/";
         public bool UseTextureFolder = true; // Output to material's main texture folder
 
         /// <summary>

@@ -32,11 +32,11 @@ namespace GradationTextureGenerator.UI
         private GUIStyle _sectionStyle;
         private bool _stylesInitialized = false;
         
-        [MenuItem("Tools/Gradation Texture Generator")]
+        [MenuItem("Tools/Gradation Baker")]
         public static void ShowWindow()
         {
             var window = GetWindow<GradationBakerWindow>();
-            window.titleContent = new GUIContent("Gradation Gen");
+            window.titleContent = new GUIContent("Gradation Baker");
             window.minSize = new Vector2(350, 500);
         }
 
@@ -194,6 +194,19 @@ namespace GradationTextureGenerator.UI
                 {
                     SceneView.RepaintAll();
                 }
+                
+                // Gradient save/load buttons
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button(L("save_gradient")))
+                {
+                    SaveGradientAsTexture();
+                }
+                if (GUILayout.Button(L("load_gradient")))
+                {
+                    LoadGradientFromTexture();
+                }
+                EditorGUILayout.EndHorizontal();
+                
                 EditorGUILayout.EndVertical();
             }
 
@@ -218,9 +231,15 @@ namespace GradationTextureGenerator.UI
                 EditorGUI.BeginChangeCheck();
                 _settings.BoxCenter = EditorGUILayout.Vector3Field(L("center"), _settings.BoxCenter);
                 
+                EditorGUILayout.BeginHorizontal();
                 Vector3 euler = _settings.BoxRotation.eulerAngles;
                 euler = EditorGUILayout.Vector3Field(L("rotation"), euler);
                 _settings.BoxRotation = Quaternion.Euler(euler);
+                if (GUILayout.Button(L("reset"), GUILayout.Width(50)))
+                {
+                    _settings.BoxRotation = Quaternion.identity;
+                }
+                EditorGUILayout.EndHorizontal();
                 
                 _settings.BoxHeight = EditorGUILayout.FloatField(L("height"), _settings.BoxHeight);
                 _settings.BoxHeight = Mathf.Max(0.01f, _settings.BoxHeight);
@@ -553,6 +572,10 @@ namespace GradationTextureGenerator.UI
                     }
                 }
             }
+            
+            // Fit to mesh bounds after creating or deleting work meshes
+            _settings.FitToAllMeshBounds();
+            
             SceneView.RepaintAll();
         }
 
@@ -614,6 +637,135 @@ namespace GradationTextureGenerator.UI
                 return mf ? mf.sharedMesh : null;
             }
             return null;
+        }
+
+        private void SaveGradientAsTexture()
+        {
+            // Ensure gradient directory exists
+            string gradientDir = "Assets/GeneratedGradation/gradation";
+            if (!AssetDatabase.IsValidFolder(gradientDir))
+            {
+                if (!AssetDatabase.IsValidFolder("Assets/GeneratedGradation"))
+                {
+                    AssetDatabase.CreateFolder("Assets", "GeneratedGradation");
+                }
+                AssetDatabase.CreateFolder("Assets/GeneratedGradation", "gradation");
+            }
+            
+            // Generate unique filename
+            string fullDirPath = OutputPathResolver.ToFullPath(gradientDir);
+            string fileName = GenerateUniqueGradientFilename(fullDirPath);
+            string fullPath = Path.Combine(fullDirPath, fileName).Replace('\\', '/');
+            
+            // Create gradient texture (256x1)
+            Texture2D tex = new Texture2D(256, 1, TextureFormat.RGBA32, false);
+            for (int i = 0; i < 256; i++)
+            {
+                float t = i / 255f;
+                tex.SetPixel(i, 0, _settings.Gradient.Evaluate(t));
+            }
+            tex.Apply();
+            
+            // Save as PNG
+            byte[] bytes = tex.EncodeToPNG();
+            Object.DestroyImmediate(tex);
+            
+            File.WriteAllBytes(fullPath, bytes);
+            AssetDatabase.Refresh();
+            
+            FileLogger.Log($"[GradationBakerWindow] Gradient saved to: {fullPath}");
+        }
+
+        private string GenerateUniqueGradientFilename(string folderPath)
+        {
+            string baseName = "gradient";
+            string extension = ".png";
+            
+            // Check if base name exists
+            string fullPath = Path.Combine(folderPath, baseName + extension).Replace('\\', '/');
+            if (!File.Exists(fullPath))
+            {
+                return baseName + extension;
+            }
+            
+            // Find next available number
+            int counter = 1;
+            while (true)
+            {
+                string numberedName = $"{baseName} {counter}{extension}";
+                fullPath = Path.Combine(folderPath, numberedName).Replace('\\', '/');
+                
+                if (!File.Exists(fullPath))
+                {
+                    return numberedName;
+                }
+                
+                counter++;
+                
+                if (counter > 9999)
+                {
+                    return $"{baseName}_{System.DateTime.Now:yyyyMMddHHmmss}{extension}";
+                }
+            }
+        }
+
+        private void LoadGradientFromTexture()
+        {
+            // Default to gradient directory
+            string gradientDir = Path.Combine(Application.dataPath, "GeneratedGradation/gradation").Replace('\\', '/');
+            if (!Directory.Exists(gradientDir))
+            {
+                gradientDir = Application.dataPath;
+            }
+            
+            string path = EditorUtility.OpenFilePanel(
+                "Load Gradient",
+                gradientDir,
+                "png"
+            );
+            
+            if (string.IsNullOrEmpty(path)) return;
+            
+            // Convert to relative path if inside Assets
+            if (path.StartsWith(Application.dataPath))
+            {
+                path = "Assets" + path.Substring(Application.dataPath.Length);
+            }
+            
+            Texture2D tex = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            if (tex == null)
+            {
+                // Try loading from file directly
+                byte[] bytes = System.IO.File.ReadAllBytes(path);
+                tex = new Texture2D(2, 2);
+                tex.LoadImage(bytes);
+            }
+            
+            if (tex == null || tex.width < 2) return;
+            
+            // Create gradient from texture
+            Gradient gradient = new Gradient();
+            
+            // Sample colors at key points
+            int numKeys = Mathf.Min(8, tex.width);
+            GradientColorKey[] colorKeys = new GradientColorKey[numKeys];
+            GradientAlphaKey[] alphaKeys = new GradientAlphaKey[numKeys];
+            
+            for (int i = 0; i < numKeys; i++)
+            {
+                float t = i / (float)(numKeys - 1);
+                int x = Mathf.RoundToInt(t * (tex.width - 1));
+                Color c = tex.GetPixel(x, 0);
+                
+                colorKeys[i] = new GradientColorKey(c, t);
+                alphaKeys[i] = new GradientAlphaKey(c.a, t);
+            }
+            
+            gradient.SetKeys(colorKeys, alphaKeys);
+            _settings.Gradient = gradient;
+            
+            SceneView.RepaintAll();
+            FileLogger.Log($"[GradationBakerWindow] Gradient loaded from: {path}");
         }
 
         /// <summary>
