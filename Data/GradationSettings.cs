@@ -11,6 +11,13 @@ namespace GradationTextureGenerator.Data
         Z = 3
     }
 
+    public enum BackgroundColor
+    {
+        Transparent = 0,
+        White = 1,
+        Black = 2
+    }
+
     [System.Serializable]
     public class MeshEntry
     {
@@ -66,6 +73,7 @@ namespace GradationTextureGenerator.Data
         // Output Settings
         public string SavePath = "Assets/GeneratedGradation/output/";
         public bool UseTextureFolder = true; // Output to material's main texture folder
+        public BackgroundColor BgColor = BackgroundColor.Transparent;
 
         /// <summary>
         /// Gets mirrored box settings

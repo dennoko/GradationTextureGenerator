@@ -343,6 +343,10 @@ namespace GradationTextureGenerator.UI
                     EditorGUILayout.EndHorizontal();
                 }
                 
+                // Background Color
+                string[] bgOptions = { L("bg_transparent"), L("bg_white"), L("bg_black") };
+                _settings.BgColor = (BackgroundColor)EditorGUILayout.Popup(L("bg_color"), (int)_settings.BgColor, bgOptions);
+                
                 // Restore label width
                 EditorGUIUtility.labelWidth = originalLabelWidth;
                 
@@ -527,6 +531,21 @@ namespace GradationTextureGenerator.UI
             }
             
             AssetDatabase.Refresh();
+            
+            // Set texture importer settings for transparent textures
+            if (_settings.BgColor == BackgroundColor.Transparent)
+            {
+                foreach (string fullPath in savedPaths)
+                {
+                    string assetPath = "Assets" + fullPath.Substring(Application.dataPath.Length);
+                    TextureImporter importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
+                    if (importer != null)
+                    {
+                        importer.alphaIsTransparency = true;
+                        importer.SaveAndReimport();
+                    }
+                }
+            }
             
             if (savedCount > 0)
             {

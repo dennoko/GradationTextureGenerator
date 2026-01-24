@@ -116,7 +116,23 @@ namespace GradationTextureGenerator.Execute
             int res = settings.Resolution;
             RenderTexture rt = RenderTexture.GetTemporary(res, res, 0, RenderTextureFormat.ARGB32);
             RenderTexture.active = rt;
-            GL.Clear(true, true, Color.clear);
+            
+            // Clear with selected background color
+            Color clearColor = Color.clear;
+            switch (settings.BgColor)
+            {
+                case BackgroundColor.White:
+                    clearColor = Color.white;
+                    break;
+                case BackgroundColor.Black:
+                    clearColor = Color.black;
+                    break;
+                case BackgroundColor.Transparent:
+                default:
+                    clearColor = Color.clear;
+                    break;
+            }
+            GL.Clear(true, true, clearColor);
 
             // Draw Mesh
             if (mat.SetPass(0))
