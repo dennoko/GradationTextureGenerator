@@ -51,6 +51,10 @@ Shader "Hidden/GradationBaker/Preview"
             float _BoxHeight;
             float _Opacity;
             
+            // Mirror parameters
+            int _UseMirror;
+            float4x4 _WorldToBoxMirror;
+            
             // UV Channel and Mask settings
             int _UVChannel;
             int _UseMaskTexture;
@@ -76,16 +80,7 @@ Shader "Hidden/GradationBaker/Preview"
 
             fixed4 frag (v2f i) : SV_Target
             {
-                // Transform world position to box local space
-                float3 boxLocalPos = mul(_WorldToBox, float4(i.worldPos, 1.0)).xyz;
-                
-                // In box local space, Y goes from -0.5 to 0.5 (normalized box)
-                float t = saturate(boxLocalPos.y + 0.5);
-                
-                // Sample Gradient Color from LUT
-                fixed4 col = tex2D(_MainTex, float2(t, 0.5));
-                
-                // Calculate Mask
+                // Calculate Mask first (common for both)
                 float mask = 1.0;
                 
                 if (_UseMaskTexture == 1)
@@ -104,11 +99,30 @@ Shader "Hidden/GradationBaker/Preview"
                 {
                     mask = 1.0 - mask;
                 }
+
+                // --- Main Gradient ---
+                float3 boxLocalPos = mul(_WorldToBox, float4(i.worldPos, 1.0)).xyz;
+                float t = saturate(boxLocalPos.y + 0.5);
+                fixed4 colMain = tex2D(_MainTex, float2(t, 0.5));
+                colMain.a *= mask;
+
+                // --- Mirror Gradient ---
+                fixed4 colMirror = fixed4(0,0,0,0);
+                if (_UseMirror == 1)
+                {
+                    float3 boxLocalPosMirror = mul(_WorldToBoxMirror, float4(i.worldPos, 1.0)).xyz;
+                    float tMirror = saturate(boxLocalPosMirror.y + 0.5);
+                    colMirror = tex2D(_MainTex, float2(tMirror, 0.5));
+                    colMirror.a *= mask;
+                }
+
+                // --- Max Blend (Simulate Bake result) ---
+                fixed4 finalCol = max(colMain, colMirror);
                 
-                // Apply mask and global opacity for preview
-                col.a *= mask * _Opacity;
+                // Apply global opacity for preview
+                finalCol.a *= _Opacity;
                 
-                return col;
+                return finalCol;
             }
             ENDCG
         }

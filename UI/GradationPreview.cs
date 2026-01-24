@@ -11,7 +11,7 @@ namespace GradationBaker.UI
         private Texture2D _lutTexture;
 
 
-        public void UpdatePreview(GradationSettings settings, MeshEntry entry, bool useMirror = false)
+        public void UpdatePreview(GradationSettings settings, MeshEntry entry)
         {
             if (Event.current.type != EventType.Repaint) return;
             Renderer renderer = entry.ActiveRenderer;
@@ -32,23 +32,29 @@ namespace GradationBaker.UI
             // Update LUT
             UpdateLUT(settings.Gradient);
 
-            // Get box parameters (mirrored if requested)
-            Vector3 boxCenter = settings.BoxCenter;
-            Quaternion boxRotation = settings.BoxRotation;
-            
-            if (useMirror)
-            {
-                (boxCenter, boxRotation) = settings.GetMirroredBox(renderer.transform);
-            }
-
-            // Calculate world-to-box transformation matrix
+            // Calculate Main Matrix
             Matrix4x4 boxMatrix = Matrix4x4.TRS(
-                boxCenter, 
-                boxRotation, 
+                settings.BoxCenter, 
+                settings.BoxRotation, 
                 new Vector3(GradationSettings.BoxWidth, settings.BoxHeight, GradationSettings.BoxDepth)
             );
             Matrix4x4 worldToBox = boxMatrix.inverse;
             Matrix4x4 localToWorld = renderer.localToWorldMatrix;
+
+            // Calculate Mirror Matrix
+            bool isMirrorEnabled = settings.UseMirror && settings.MirrorAxis != MirrorAxis.None;
+            Matrix4x4 worldToBoxMirror = Matrix4x4.identity;
+            
+            if (isMirrorEnabled)
+            {
+                var (mirrorCenter, mirrorRot) = settings.GetMirroredBox(renderer.transform);
+                Matrix4x4 mirrorBoxMatrix = Matrix4x4.TRS(
+                    mirrorCenter, 
+                    mirrorRot, 
+                    new Vector3(GradationSettings.BoxWidth, settings.BoxHeight, GradationSettings.BoxDepth)
+                );
+                worldToBoxMirror = mirrorBoxMatrix.inverse;
+            }
 
             // Set shader properties
             _previewMaterial.SetTexture("_MainTex", _lutTexture);
@@ -57,6 +63,10 @@ namespace GradationBaker.UI
             _previewMaterial.SetFloat("_BoxHeight", settings.BoxHeight);
             _previewMaterial.SetFloat("_Opacity", settings.PreviewOpacity);
             
+            // Mirror settings
+            _previewMaterial.SetInt("_UseMirror", isMirrorEnabled ? 1 : 0);
+            _previewMaterial.SetMatrix("_WorldToBoxMirror", worldToBoxMirror);
+
             // Mask settings (per-mesh)
             _previewMaterial.SetInt("_UVChannel", entry.UVChannel);
             if (entry.MaskTexture != null)
@@ -71,7 +81,7 @@ namespace GradationBaker.UI
             _previewMaterial.SetInt("_UseVertexColorMask", entry.UseVertexColorMask ? 1 : 0);
             _previewMaterial.SetInt("_InvertMask", entry.InvertMask ? 1 : 0);
 
-            // Draw mesh with preview material
+            // Draw mesh with preview material (Single Pass)
             if (_previewMaterial.SetPass(0))
             {
                 Graphics.DrawMeshNow(mesh, localToWorld);
@@ -85,17 +95,7 @@ namespace GradationBaker.UI
         {
             foreach (var entry in settings.MeshEntries)
             {
-                Renderer renderer = entry.ActiveRenderer;
-                if (renderer == null) continue;
-                
-                // Draw main gradation
-                UpdatePreview(settings, entry, false);
-                
-                // Draw mirrored gradation if enabled
-                if (settings.UseMirror && settings.MirrorAxis != MirrorAxis.None)
-                {
-                    UpdatePreview(settings, entry, true);
-                }
+                UpdatePreview(settings, entry);
             }
         }
         
