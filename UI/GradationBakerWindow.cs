@@ -25,7 +25,7 @@ namespace GradationBaker.UI
         private bool _gradientFoldout = true;
         private bool _boxSettingsFoldout = true;
         private bool _mirrorFoldout = false;
-        private bool _maskingFoldout = false;
+        private bool _helpFoldout = false;
         private bool _outputFoldout = true;
         
         // Styles
@@ -239,6 +239,10 @@ namespace GradationBaker.UI
 
             if (_settings.MeshEntries.Count == 0 || _settings.GetPrimaryRenderer() == null)
             {
+                EditorGUILayout.Space(10);
+                EditorGUILayout.LabelField(L("help_title"), EditorStyles.boldLabel);
+                EditorGUILayout.HelpBox(L("help_usage"), MessageType.Info);
+                EditorGUILayout.HelpBox(L("help_warning"), MessageType.Warning);
                 return;
             }
 
@@ -342,16 +346,7 @@ namespace GradationBaker.UI
 
             EditorGUILayout.Space(5);
 
-            // Masking Section
-            _maskingFoldout = EditorGUILayout.Foldout(_maskingFoldout, L("masking"), true, EditorStyles.foldoutHeader);
-            if (_maskingFoldout)
-            {
-                EditorGUILayout.BeginVertical(_sectionStyle);
-                _settings.MaskTexture = (Texture2D)EditorGUILayout.ObjectField(L("mask_texture"), _settings.MaskTexture, typeof(Texture2D), false);
-                _settings.UseVertexColorMask = EditorGUILayout.Toggle(L("use_vertex_color"), _settings.UseVertexColorMask);
-                _settings.InvertMask = EditorGUILayout.Toggle(L("invert_mask"), _settings.InvertMask);
-                EditorGUILayout.EndVertical();
-            }
+
 
             EditorGUILayout.Space(5);
 
@@ -364,10 +359,6 @@ namespace GradationBaker.UI
                 // Set label width for 2:1 ratio
                 float originalLabelWidth = EditorGUIUtility.labelWidth;
                 EditorGUIUtility.labelWidth = EditorGUIUtility.currentViewWidth * 0.55f;
-                
-                // UV Channel
-                string[] uvOptions = { "UV0", "UV1", "UV2", "UV3" };
-                _settings.UVChannel = EditorGUILayout.Popup(L("uv_channel"), _settings.UVChannel, uvOptions);
                 
                 // Resolution (dropdown)
                 string[] resOptions = { "128", "256", "512", "1024", "2048", "4096" };
@@ -432,6 +423,15 @@ namespace GradationBaker.UI
             }
             GUI.backgroundColor = Color.white;
             
+            // Help Section (Collapsed by default)
+            EditorGUILayout.Space(10);
+            _helpFoldout = EditorGUILayout.Foldout(_helpFoldout, L("help_title"), true, EditorStyles.foldoutHeader);
+            if (_helpFoldout)
+            {
+                EditorGUILayout.HelpBox(L("help_usage"), MessageType.Info);
+                EditorGUILayout.HelpBox(L("help_warning"), MessageType.Warning);
+            }
+
             // Status bar at bottom
             GUILayout.FlexibleSpace();
             _statusBar.Draw();

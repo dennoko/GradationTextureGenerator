@@ -47,7 +47,11 @@
     "mesh_item": "メッシュ {0}",
     "work": "作業用",
     "remove": "削除",
-    "status_bake_success": "{0}個のテクスチャを保存しました",
-    "status_bake_error": "ベイクに失敗しました",
-    "status_gradient_saved": "グラデーションを保存しました"
+    "status_idle": "待機中...",
+    "status_bake_success": "成功: {0}枚のテクスチャを保存しました",
+    "status_bake_error": "エラー: 保存に失敗しました",
+    "status_gradient_saved": "グラデーションを保存しました",
+    "help_title": "使い方・ヒント",
+    "help_usage": "1. ヒエラルキーから対象のメッシュ(Renderer)をドラッグ＆ドロップ\n2. ボックスハンドルでグラデーション範囲を調整\n3. 必要に応じて各メッシュのマスク設定を調整\n4. 「ベイク＆保存」でテクスチャ生成",
+    "help_warning": "※プレビューの表示ズレやギズモが表示されない場合は、「作業用メッシュを生成」を試してください。"
 }
