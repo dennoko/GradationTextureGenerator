@@ -10,7 +10,7 @@ namespace GradationTextureGenerator.UI
         private Material _previewMaterial;
         private Texture2D _lutTexture;
 
-        public void UpdatePreview(GradationSettings settings, Renderer renderer, Matrix4x4 localToWorld)
+        public void UpdatePreview(GradationSettings settings, Renderer renderer, Matrix4x4 localToWorld, bool useMirror = false)
         {
             if (Event.current.type != EventType.Repaint) return;
             if (renderer == null) return;
@@ -30,10 +30,19 @@ namespace GradationTextureGenerator.UI
             // Update LUT
             UpdateLUT(settings.Gradient);
 
+            // Get box parameters (mirrored if requested)
+            Vector3 boxCenter = settings.BoxCenter;
+            Quaternion boxRotation = settings.BoxRotation;
+            
+            if (useMirror)
+            {
+                (boxCenter, boxRotation) = settings.GetMirroredBox(renderer.transform);
+            }
+
             // Calculate world-to-box transformation matrix
             Matrix4x4 boxMatrix = Matrix4x4.TRS(
-                settings.BoxCenter, 
-                settings.BoxRotation, 
+                boxCenter, 
+                boxRotation, 
                 new Vector3(GradationSettings.BoxWidth, settings.BoxHeight, GradationSettings.BoxDepth)
             );
             Matrix4x4 worldToBox = boxMatrix.inverse;
@@ -53,7 +62,7 @@ namespace GradationTextureGenerator.UI
         }
 
         /// <summary>
-        /// Updates preview for all mesh entries
+        /// Updates preview for all mesh entries (with optional mirror)
         /// </summary>
         public void UpdatePreviewAll(GradationSettings settings)
         {
@@ -62,7 +71,14 @@ namespace GradationTextureGenerator.UI
                 Renderer renderer = entry.ActiveRenderer;
                 if (renderer == null) continue;
                 
-                UpdatePreview(settings, renderer, renderer.localToWorldMatrix);
+                // Draw main gradation
+                UpdatePreview(settings, renderer, renderer.localToWorldMatrix, false);
+                
+                // Draw mirrored gradation if enabled
+                if (settings.UseMirror && settings.MirrorAxis != MirrorAxis.None)
+                {
+                    UpdatePreview(settings, renderer, renderer.localToWorldMatrix, true);
+                }
             }
         }
         

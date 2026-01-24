@@ -12,7 +12,7 @@ namespace GradationTextureGenerator.Execute
         private static readonly Vector3 DefaultOffset = new Vector3(1.5f, 0f, 0f);
 
         /// <summary>
-        /// Creates a work mesh copy of the source renderer
+        /// Creates a work mesh copy of the source renderer using MeshFilter + MeshRenderer
         /// </summary>
         public static GameObject CreateWorkMesh(Renderer sourceRenderer)
         {
@@ -30,22 +30,12 @@ namespace GradationTextureGenerator.Execute
             workObj.transform.rotation = sourceRenderer.transform.rotation;
             workObj.transform.localScale = Vector3.one; // Reset scale to 1
 
-            // Add SkinnedMeshRenderer or MeshRenderer based on source
-            if (sourceRenderer is SkinnedMeshRenderer sourceSMR)
-            {
-                var smr = workObj.AddComponent<SkinnedMeshRenderer>();
-                smr.sharedMesh = sourceMesh;
-                smr.sharedMaterials = sourceRenderer.sharedMaterials;
-                smr.rootBone = null; // No bones for work mesh
-            }
-            else
-            {
-                var mf = workObj.AddComponent<MeshFilter>();
-                mf.sharedMesh = sourceMesh;
-                
-                var mr = workObj.AddComponent<MeshRenderer>();
-                mr.sharedMaterials = sourceRenderer.sharedMaterials;
-            }
+            // Always use MeshFilter + MeshRenderer for work mesh
+            var mf = workObj.AddComponent<MeshFilter>();
+            mf.sharedMesh = sourceMesh;
+            
+            var mr = workObj.AddComponent<MeshRenderer>();
+            mr.sharedMaterials = sourceRenderer.sharedMaterials;
 
             // Register undo
             Undo.RegisterCreatedObjectUndo(workObj, "Create Work Mesh");
@@ -80,10 +70,6 @@ namespace GradationTextureGenerator.Execute
         public static Renderer GetRenderer(GameObject workMesh)
         {
             if (workMesh == null) return null;
-            
-            var smr = workMesh.GetComponent<SkinnedMeshRenderer>();
-            if (smr != null) return smr;
-            
             return workMesh.GetComponent<MeshRenderer>();
         }
 

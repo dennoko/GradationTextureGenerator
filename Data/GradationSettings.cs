@@ -3,6 +3,14 @@ using System.Collections.Generic;
 
 namespace GradationTextureGenerator.Data
 {
+    public enum MirrorAxis
+    {
+        None = 0,
+        X = 1,
+        Y = 2,
+        Z = 3
+    }
+
     [System.Serializable]
     public class MeshEntry
     {
@@ -26,10 +34,14 @@ namespace GradationTextureGenerator.Data
         public Texture2D MaskTexture;
         public bool UseVertexColorMask = false;
         public bool InvertMask = false;
-        public int Resolution = 1024;
+        public int Resolution = 2048;
         
         // UV Channel selection (0-3)
         public int UVChannel = 0;
+        
+        // Mirror settings
+        public bool UseMirror = false;
+        public MirrorAxis MirrorAxis = MirrorAxis.X;
         
         // Cube-based gradation control
         public Vector3 BoxCenter = Vector3.zero;
@@ -51,7 +63,59 @@ namespace GradationTextureGenerator.Data
         public bool IsToolActive = true;
         public float PreviewOpacity = 0.5f;
 
-        public string SavePath = "Assets/";
+        // Output Settings
+        public string SavePath = "Assets/GeneratedGradation/";
+        public bool UseTextureFolder = true; // Output to material's main texture folder
+
+        /// <summary>
+        /// Gets mirrored box settings
+        /// </summary>
+        public (Vector3 center, Quaternion rotation) GetMirroredBox(Transform meshTransform)
+        {
+            if (!UseMirror || MirrorAxis == Data.MirrorAxis.None)
+                return (BoxCenter, BoxRotation);
+            
+            Vector3 origin = meshTransform != null ? meshTransform.position : Vector3.zero;
+            Vector3 mirroredCenter = BoxCenter;
+            Quaternion mirroredRotation = BoxRotation;
+            
+            // Mirror center position
+            Vector3 relativePos = BoxCenter - origin;
+            switch (MirrorAxis)
+            {
+                case Data.MirrorAxis.X:
+                    relativePos.x = -relativePos.x;
+                    break;
+                case Data.MirrorAxis.Y:
+                    relativePos.y = -relativePos.y;
+                    break;
+                case Data.MirrorAxis.Z:
+                    relativePos.z = -relativePos.z;
+                    break;
+            }
+            mirroredCenter = origin + relativePos;
+            
+            // Mirror rotation
+            Vector3 eulerAngles = BoxRotation.eulerAngles;
+            switch (MirrorAxis)
+            {
+                case Data.MirrorAxis.X:
+                    eulerAngles.y = -eulerAngles.y;
+                    eulerAngles.z = -eulerAngles.z;
+                    break;
+                case Data.MirrorAxis.Y:
+                    eulerAngles.x = -eulerAngles.x;
+                    eulerAngles.z = -eulerAngles.z;
+                    break;
+                case Data.MirrorAxis.Z:
+                    eulerAngles.x = -eulerAngles.x;
+                    eulerAngles.y = -eulerAngles.y;
+                    break;
+            }
+            mirroredRotation = Quaternion.Euler(eulerAngles);
+            
+            return (mirroredCenter, mirroredRotation);
+        }
         
         /// <summary>
         /// Gets the first valid renderer for Box fitting
@@ -66,44 +130,6 @@ namespace GradationTextureGenerator.Data
             return null;
         }
         
-        /// <summary>
-        /// Fits the box to the combined mesh bounds of all entries
-        /// </summary>
-        public void FitToMeshBounds(Mesh mesh, Transform transform)
-        {
-            if (mesh == null) return;
-            
-            Vector3[] vertices = mesh.vertices;
-            if (vertices.Length == 0) return;
-            
-            Vector3 dir = GradientDirection.normalized;
-            
-            float min = float.MaxValue;
-            float max = float.MinValue;
-            Vector3 worldCenter = Vector3.zero;
-            
-            foreach (var v in vertices)
-            {
-                Vector3 worldV = transform != null ? transform.TransformPoint(v) : v;
-                worldCenter += worldV;
-                float t = Vector3.Dot(worldV, dir);
-                if (t < min) min = t;
-                if (t > max) max = t;
-            }
-            worldCenter /= vertices.Length;
-            
-            if (Mathf.Abs(max - min) < 0.0001f) max = min + 1.0f;
-            
-            BoxHeight = max - min;
-            
-            float midT = (min + max) / 2f;
-            BoxCenter = dir * midT;
-            
-            Vector3 projectedCenter = Vector3.Project(worldCenter, dir);
-            Vector3 perpendicularOffset = worldCenter - projectedCenter;
-            BoxCenter = dir * midT + perpendicularOffset;
-        }
-
         /// <summary>
         /// Fits box to all mesh entries combined bounds
         /// </summary>

@@ -202,6 +202,56 @@ namespace GradationTextureGenerator.UI
             return texture;
         }
 
+        /// <summary>
+        /// Draws a visualization of the mirrored gradation box
+        /// </summary>
+        public void DrawMirrorHandle(GradationSettings settings)
+        {
+            if (!settings.UseMirror || settings.MirrorAxis == MirrorAxis.None)
+                return;
+            
+            // Get primary renderer for origin reference
+            Renderer primaryRenderer = settings.GetPrimaryRenderer();
+            Transform transform = primaryRenderer != null ? primaryRenderer.transform : null;
+            
+            var (mirrorCenter, mirrorRotation) = settings.GetMirroredBox(transform);
+            
+            Vector3 size = new Vector3(GradationSettings.BoxWidth, settings.BoxHeight, GradationSettings.BoxDepth);
+            
+            Matrix4x4 oldMatrix = Handles.matrix;
+            Handles.matrix = Matrix4x4.TRS(mirrorCenter, mirrorRotation, Vector3.one);
+            
+            // Draw mirrored cube with different color (cyan)
+            Handles.color = new Color(0f, 1f, 1f, 0.3f);
+            Handles.DrawWireCube(Vector3.zero, size);
+            
+            // Draw edges
+            Handles.color = new Color(0f, 1f, 1f, 0.6f);
+            DrawBoxEdges(size);
+            
+            // Draw mirror arrow
+            Handles.color = Color.cyan;
+            float arrowLength = settings.BoxHeight * 0.3f;
+            Handles.ArrowHandleCap(0, Vector3.zero, Quaternion.LookRotation(Vector3.up), arrowLength, EventType.Repaint);
+            
+            Handles.matrix = oldMatrix;
+            
+            // Draw mirror axis indicator line
+            Vector3 origin = transform != null ? transform.position : Vector3.zero;
+            Handles.color = new Color(1f, 0f, 1f, 0.5f);
+            
+            Vector3 axisDir = Vector3.zero;
+            switch (settings.MirrorAxis)
+            {
+                case MirrorAxis.X: axisDir = Vector3.right; break;
+                case MirrorAxis.Y: axisDir = Vector3.up; break;
+                case MirrorAxis.Z: axisDir = Vector3.forward; break;
+            }
+            
+            float lineLength = 2f;
+            Handles.DrawDottedLine(origin - axisDir * lineLength, origin + axisDir * lineLength, 5f);
+        }
+
         public void Cleanup()
         {
             // No persistent objects to cleanup

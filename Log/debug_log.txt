@@ -1,14 +1,9 @@
-﻿[2026-01-24 17:21:19] [GradationBakerWindow] Bake & Save button clicked.
-[2026-01-24 17:21:19] [GradationBaker] Starting Bake...
-[2026-01-24 17:21:19] [GradationBaker] Target Mesh: ModsCoat, Vertex Count: 8588
-[2026-01-24 17:21:19] [GradationBaker] Shader found: Hidden/GradationTextureGenerator/Bake
-[2026-01-24 17:21:19] [GradationBaker] Box Center: (1.49, 1.02, 0.02), Height: 0.9323655
-[2026-01-24 17:21:19] [GradationBaker] Resolution: 2048
-[2026-01-24 17:21:19] [GradationBaker] Drawing Mesh Now...
-[2026-01-24 17:21:19] [GradationBaker] ReadPixels finished.
-[2026-01-24 17:21:19] [GradationBakerWindow] SavePath setting: Assets/
-[2026-01-24 17:21:19] [GradationBakerWindow] Full Directory Path: C:/Users/dennoko/AppData/Local/VRChatCreatorCompanion/VRChatProjects/Unity_extension_development/Assets
-[2026-01-24 17:21:19] [GradationBakerWindow] Writing file to: C:/Users/dennoko/AppData/Local/VRChatCreatorCompanion/VRChatProjects/Unity_extension_development/Assets/Gradation_ModsCoat [WorkCopy]_20260124172119.png
-[2026-01-24 17:21:20] [GradationTextureGenerator] Saved to C:/Users/dennoko/AppData/Local/VRChatCreatorCompanion/VRChatProjects/Unity_extension_development/Assets/Gradation_ModsCoat [WorkCopy]_20260124172119.png
-[2026-01-24 17:55:26] [WorkMeshManager] Created work mesh: [GradGen_Work] ModsCoat
-[2026-01-24 17:57:53] [WorkMeshManager] Deleted work mesh: [GradGen_Work] ModsCoat
+﻿[2026-01-24 18:08:35] [GradationBakerWindow] Bake & Save clicked.
+[2026-01-24 18:08:35] [GradationBaker] Starting Bake for [GradGen_Work] ModsCoat (mirror=False)...
+[2026-01-24 18:08:35] [GradationBaker] Starting Bake for [GradGen_Work] LeatherPants (mirror=False)...
+[2026-01-24 18:08:35] [GradationBakerWindow] Saved: C:/Users/dennoko/AppData/Local/VRChatCreatorCompanion/VRChatProjects/Unity_extension_development/Assets/TinmeshiTei/Avatar/Zev/Material/Texture/Cloth/ModsCoat_gradation.png
+[2026-01-24 18:08:35] [GradationBakerWindow] Saved: C:/Users/dennoko/AppData/Local/VRChatCreatorCompanion/VRChatProjects/Unity_extension_development/Assets/TinmeshiTei/Avatar/Zev/Material/Texture/Cloth/LeatherPants_gradation.png
+[2026-01-24 18:17:40] [WorkMeshManager] Deleted work mesh: [GradGen_Work] ModsCoat
+[2026-01-24 18:17:40] [WorkMeshManager] Deleted work mesh: [GradGen_Work] LeatherPants
+[2026-01-24 18:18:32] [WorkMeshManager] Created work mesh: [GradGen_Work] ModsCoat
+[2026-01-24 18:18:32] [WorkMeshManager] Created work mesh: [GradGen_Work] LeatherPants

@@ -9,7 +9,7 @@ namespace GradationTextureGenerator.Execute
         private const string ShaderPath = "Hidden/GradationTextureGenerator/Bake";
 
         /// <summary>
-        /// Bakes gradation textures for all mesh entries
+        /// Bakes gradation textures for all mesh entries (with optional mirror)
         /// </summary>
         public List<BakeResult> BakeAll(GradationSettings settings)
         {
@@ -20,11 +20,26 @@ namespace GradationTextureGenerator.Execute
                 Renderer renderer = entry.ActiveRenderer;
                 if (renderer == null) continue;
                 
-                Texture2D tex = Bake(settings, renderer);
+                // Bake main gradation
+                Texture2D tex = Bake(settings, renderer, false);
+                
+                // If mirror is enabled, blend with mirrored gradation
+                if (settings.UseMirror && settings.MirrorAxis != MirrorAxis.None && tex != null)
+                {
+                    Texture2D mirrorTex = Bake(settings, renderer, true);
+                    if (mirrorTex != null)
+                    {
+                        // Blend textures (max blend for gradation)
+                        BlendTextures(tex, mirrorTex);
+                        Object.DestroyImmediate(mirrorTex);
+                    }
+                }
+                
                 results.Add(new BakeResult
                 {
                     Texture = tex,
-                    RendererName = entry.SourceRenderer != null ? entry.SourceRenderer.name : "Unknown"
+                    RendererName = entry.SourceRenderer != null ? entry.SourceRenderer.name : "Unknown",
+                    SourceRenderer = entry.SourceRenderer
                 });
             }
             
@@ -34,9 +49,9 @@ namespace GradationTextureGenerator.Execute
         /// <summary>
         /// Bakes a single renderer to texture
         /// </summary>
-        public Texture2D Bake(GradationSettings settings, Renderer renderer)
+        public Texture2D Bake(GradationSettings settings, Renderer renderer, bool useMirror = false)
         {
-            FileLogger.Log($"[GradationBaker] Starting Bake for {renderer.name}...");
+            FileLogger.Log($"[GradationBaker] Starting Bake for {renderer.name} (mirror={useMirror})...");
             
             Mesh mesh = GetMesh(renderer);
             if (mesh == null)
@@ -44,7 +59,6 @@ namespace GradationTextureGenerator.Execute
                 FileLogger.LogError("[GradationBaker] Mesh not found.");
                 return null;
             }
-            FileLogger.Log($"[GradationBaker] Target Mesh: {mesh.name}, Vertex Count: {mesh.vertexCount}");
 
             MeshReadWriteEnabler.EnsureReadWriteEnabled(mesh);
 
@@ -60,10 +74,19 @@ namespace GradationTextureGenerator.Execute
             Texture2D lut = CreateGradientLUT(settings.Gradient);
             mat.SetTexture("_MainTex", lut);
 
+            // Get box parameters (mirrored if requested)
+            Vector3 boxCenter = settings.BoxCenter;
+            Quaternion boxRotation = settings.BoxRotation;
+            
+            if (useMirror)
+            {
+                (boxCenter, boxRotation) = settings.GetMirroredBox(renderer.transform);
+            }
+
             // Calculate world-to-box transformation matrix
             Matrix4x4 boxMatrix = Matrix4x4.TRS(
-                settings.BoxCenter, 
-                settings.BoxRotation, 
+                boxCenter, 
+                boxRotation, 
                 new Vector3(GradationSettings.BoxWidth, settings.BoxHeight, GradationSettings.BoxDepth)
             );
             Matrix4x4 worldToBox = boxMatrix.inverse;
@@ -74,8 +97,6 @@ namespace GradationTextureGenerator.Execute
             
             // UV Channel
             mat.SetInt("_UVChannel", settings.UVChannel);
-
-            FileLogger.Log($"[GradationBaker] UV Channel: {settings.UVChannel}, Box Height: {settings.BoxHeight}");
 
             // Mask settings
             if (settings.MaskTexture != null)
@@ -111,7 +132,6 @@ namespace GradationTextureGenerator.Execute
             Texture2D result = new Texture2D(res, res, TextureFormat.ARGB32, false);
             result.ReadPixels(new Rect(0, 0, res, res), 0, 0);
             result.Apply();
-            FileLogger.Log("[GradationBaker] Bake completed.");
 
             // Cleanup
             RenderTexture.active = null;
@@ -120,6 +140,33 @@ namespace GradationTextureGenerator.Execute
             Object.DestroyImmediate(lut);
 
             return result;
+        }
+
+        /// <summary>
+        /// Blends two textures using max blend (for gradation overlay)
+        /// </summary>
+        private void BlendTextures(Texture2D baseT, Texture2D overlayTex)
+        {
+            Color[] basePixels = baseT.GetPixels();
+            Color[] overlayPixels = overlayTex.GetPixels();
+            
+            for (int i = 0; i < basePixels.Length; i++)
+            {
+                // Max blend - take the brighter value (or higher alpha)
+                Color baseC = basePixels[i];
+                Color overC = overlayPixels[i];
+                
+                // For gradation, we want to combine both - use additive or max
+                basePixels[i] = new Color(
+                    Mathf.Max(baseC.r, overC.r),
+                    Mathf.Max(baseC.g, overC.g),
+                    Mathf.Max(baseC.b, overC.b),
+                    Mathf.Max(baseC.a, overC.a)
+                );
+            }
+            
+            baseT.SetPixels(basePixels);
+            baseT.Apply();
         }
 
         private Mesh GetMesh(Renderer renderer)
@@ -155,5 +202,6 @@ namespace GradationTextureGenerator.Execute
     {
         public Texture2D Texture;
         public string RendererName;
+        public Renderer SourceRenderer;
     }
 }
