@@ -39,6 +39,7 @@
     "mask_texture": "マスクテクスチャ",
     "use_vertex_color": "頂点カラーを使用",
     "invert_mask": "マスク反転",
+    "split_by_material": "マテリアルごとに分割",
     "success_title": "成功",
     "success_message": "グラデーションテクスチャを保存しました:\n{0}",
     "error_title": "エラー",

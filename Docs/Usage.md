@@ -16,6 +16,7 @@ Select `Tools > Gradation Baker` from the menu to open the window.
  - **Mask Texture**: R channel of texture used as mask (optional)
  - **Use Vertex Color**: R channel of vertex color used as mask
  - **Invert Mask**: Invert mask application
+ - **Split by Material**: Outputs separate textures for each sub-mesh (material), useful when UVs overlap.
  
  ### 3. Set the Gradient
  

@@ -165,6 +165,12 @@ namespace GradationBaker.UI
                     entry.UseVertexColorMask = EditorGUI.ToggleLeft(optRect1, L("use_vertex_color"), entry.UseVertexColorMask);
                     entry.InvertMask = EditorGUI.ToggleLeft(optRect2, L("invert_mask"), entry.InvertMask);
                     
+                    y += lineHeight + 2;
+
+                    // Split by Material Option
+                    Rect splitRect = new Rect(rect.x + indent + labelW, y, 200, lineHeight);
+                    entry.SplitByMaterial = EditorGUI.ToggleLeft(splitRect, L("split_by_material"), entry.SplitByMaterial);
+                    
                     if (EditorGUI.EndChangeCheck())
                     {
                         SceneView.RepaintAll();
@@ -178,7 +184,7 @@ namespace GradationBaker.UI
                 var entry = _settings.MeshEntries[index];
                 if (entry.ShowDetails)
                 {
-                    return (EditorGUIUtility.singleLineHeight + 2) * 4 + 10; // Header + 3 rows + padding
+                    return (EditorGUIUtility.singleLineHeight + 2) * 5 + 10; // Header + 4 rows + padding
                 }
                 return EditorGUIUtility.singleLineHeight + 6;
             };
@@ -580,7 +586,7 @@ namespace GradationBaker.UI
             
             foreach (var result in results)
             {
-                if (result.Texture == null) continue;
+                if (result.Texture == null && (result.SubMeshResults == null || result.SubMeshResults.Count == 0)) continue;
                 
                 // Resolve output folder
                 string outputFolder = OutputPathResolver.ResolveOutputFolder(
@@ -592,22 +598,46 @@ namespace GradationBaker.UI
                 // Ensure directory exists
                 OutputPathResolver.EnsureDirectoryExists(outputFolder);
                 
-                // Generate unique filename
-                string fullDirPath = OutputPathResolver.ToFullPath(outputFolder);
-                string fileName = OutputPathResolver.GenerateUniqueFilename(fullDirPath, result.RendererName);
+                // Generate unique filename base
+        string fullDirPath = OutputPathResolver.ToFullPath(outputFolder);
+        
+        // Handle split results or single texture
+        if (result.SubMeshResults != null && result.SubMeshResults.Count > 0)
+        {
+            foreach (var subRes in result.SubMeshResults)
+            {
+                if (subRes.Texture == null) continue;
+
+                // Safety check for invalid char in mat name
+                string safeMatName = string.Join("_", subRes.MaterialName.Split(Path.GetInvalidFileNameChars()));
+                string baseName = $"{result.RendererName}_{safeMatName}";
+                
+                string fileName = OutputPathResolver.GenerateUniqueFilename(fullDirPath, baseName);
                 string fullPath = Path.Combine(fullDirPath, fileName).Replace('\\', '/');
                 
                 // Save
-                byte[] bytes = result.Texture.EncodeToPNG();
-                File.WriteAllBytes(fullPath, bytes);
-                Object.DestroyImmediate(result.Texture);
+                SaveTexture(subRes.Texture, fullPath);
                 
                 FileLogger.Log($"[GradationBakerWindow] Saved: {fullPath}");
                 savedPaths.Add(fullPath);
                 savedCount++;
             }
-            
-            AssetDatabase.Refresh();
+        }
+            else if (result.Texture != null)
+            {
+                string fileName = OutputPathResolver.GenerateUniqueFilename(fullDirPath, result.RendererName);
+                string fullPath = Path.Combine(fullDirPath, fileName).Replace('\\', '/');
+                
+                // Save
+                SaveTexture(result.Texture, fullPath);
+                
+                FileLogger.Log($"[GradationBakerWindow] Saved: {fullPath}");
+                savedPaths.Add(fullPath);
+                savedCount++;
+            }
+        }
+    
+        AssetDatabase.Refresh();
             
             // Set texture importer settings for transparent textures
             if (_settings.BgColor == BackgroundColor.Transparent)
@@ -927,5 +957,12 @@ namespace GradationBaker.UI
         /// </summary>
         private string L(string key) => LocalizationManager.Get(key);
         private string L(string key, params object[] args) => LocalizationManager.Get(key, args);
+
+        private void SaveTexture(Texture2D tex, string path)
+        {
+            byte[] bytes = tex.EncodeToPNG();
+            File.WriteAllBytes(path, bytes);
+            Object.DestroyImmediate(tex);
+        }
     }
 }

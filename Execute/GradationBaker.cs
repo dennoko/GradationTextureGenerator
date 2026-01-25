@@ -20,45 +20,78 @@ namespace GradationBaker.Execute
                 Renderer renderer = entry.ActiveRenderer;
                 if (renderer == null) continue;
                 
-                // Bake main gradation
-                Texture2D tex = Bake(settings, entry, false);
+                // Bake main gradation (or split based on settings)
+                BakeResult bakeResult = Bake(settings, entry, false);
                 
                 // If mirror is enabled, blend with mirrored gradation
-                if (settings.UseMirror && settings.MirrorAxis != MirrorAxis.None && tex != null)
+                if (settings.UseMirror && settings.MirrorAxis != MirrorAxis.None)
                 {
-                    Texture2D mirrorTex = Bake(settings, entry, true);
-                    if (mirrorTex != null)
+                    // For split results
+                    if (bakeResult.SubMeshResults != null && bakeResult.SubMeshResults.Count > 0)
                     {
-                        // Blend textures (max blend for gradation)
-                        BlendTextures(tex, mirrorTex);
-                        Object.DestroyImmediate(mirrorTex);
+                        var mirrorResult = Bake(settings, entry, true);
+                        if (mirrorResult != null && mirrorResult.SubMeshResults != null)
+                        {
+                            for (int i = 0; i < bakeResult.SubMeshResults.Count; i++)
+                            {
+                                var mainTex = bakeResult.SubMeshResults[i].Texture;
+                                // Try to find matching submesh in mirror result
+                                // Note: Assuming submesh order and count is identical
+                                if (i < mirrorResult.SubMeshResults.Count)
+                                {
+                                    var mirrorTex = mirrorResult.SubMeshResults[i].Texture;
+                                    if (mainTex != null && mirrorTex != null)
+                                    {
+                                        BlendTextures(mainTex, mirrorTex);
+                                    }
+                                }
+                            }
+                            
+                            // Cleanup mirror textures immediately as they are blended in
+                            foreach (var res in mirrorResult.SubMeshResults)
+                            {
+                                if (res.Texture != null) Object.DestroyImmediate(res.Texture);
+                            }
+                        }
+                    }
+                    // For single result
+                    else if (bakeResult.Texture != null)
+                    {
+                        var mirrorResult = Bake(settings, entry, true);
+                        if (mirrorResult != null && mirrorResult.Texture != null)
+                        {
+                            BlendTextures(bakeResult.Texture, mirrorResult.Texture);
+                            Object.DestroyImmediate(mirrorResult.Texture);
+                        }
                     }
                 }
                 
-                results.Add(new BakeResult
-                {
-                    Texture = tex,
-                    RendererName = entry.SourceRenderer != null ? entry.SourceRenderer.name : "Unknown",
-                    SourceRenderer = entry.SourceRenderer
-                });
+                results.Add(bakeResult);
             }
             
             return results;
         }
 
         /// <summary>
-        /// Bakes a single mesh entry to texture
+        /// Bakes a single mesh entry to texture(s)
         /// </summary>
-        public Texture2D Bake(GradationSettings settings, MeshEntry entry, bool useMirror = false)
+        public BakeResult Bake(GradationSettings settings, MeshEntry entry, bool useMirror = false)
         {
             Renderer renderer = entry.ActiveRenderer;
-            FileLogger.Log($"[GradationBaker] Starting Bake for {renderer.name} (mirror={useMirror})...");
+            FileLogger.Log($"[GradationBaker] Starting Bake for {renderer.name} (mirror={useMirror}) split={entry.SplitByMaterial}...");
             
+            BakeResult result = new BakeResult
+            {
+                RendererName = entry.SourceRenderer != null ? entry.SourceRenderer.name : "Unknown",
+                SourceRenderer = entry.SourceRenderer,
+                SubMeshResults = new List<SubMeshResult>()
+            };
+
             Mesh mesh = GetMesh(renderer);
             if (mesh == null)
             {
                 FileLogger.LogError("[GradationBaker] Mesh not found.");
-                return null;
+                return result;
             }
 
             MeshReadWriteEnabler.EnsureReadWriteEnabled(mesh);
@@ -118,7 +151,7 @@ namespace GradationBaker.Execute
             RenderTexture rt = RenderTexture.GetTemporary(res, res, 0, RenderTextureFormat.ARGB32);
             RenderTexture.active = rt;
             
-            // Clear with selected background color
+            // Clear color logic
             Color clearColor = Color.clear;
             switch (settings.BgColor)
             {
@@ -133,22 +166,56 @@ namespace GradationBaker.Execute
                     clearColor = Color.clear;
                     break;
             }
-            GL.Clear(true, true, clearColor);
 
-            // Draw Mesh
-            if (mat.SetPass(0))
+            // Material and Submesh Handling
+            Material[] sharedMaterials = renderer.sharedMaterials;
+
+            if (entry.SplitByMaterial)
             {
-                Graphics.DrawMeshNow(mesh, Matrix4x4.identity);
+                for (int i = 0; i < mesh.subMeshCount; i++)
+                {
+                    GL.Clear(true, true, clearColor);
+
+                    if (mat.SetPass(0))
+                    {
+                        Graphics.DrawMeshNow(mesh, Matrix4x4.identity, i);
+                    }
+                    else
+                    {
+                        FileLogger.LogError($"[GradationBaker] SetPass failed for submesh {i}.");
+                    }
+                    
+                    Texture2D subTex = new Texture2D(res, res, TextureFormat.ARGB32, false);
+                    subTex.ReadPixels(new Rect(0, 0, res, res), 0, 0);
+                    subTex.Apply();
+                    
+                    string matName = (i < sharedMaterials.Length && sharedMaterials[i] != null) 
+                        ? sharedMaterials[i].name 
+                        : $"Submesh{i}";
+
+                    result.SubMeshResults.Add(new SubMeshResult
+                    {
+                        Texture = subTex,
+                        SubMeshIndex = i,
+                        MaterialName = matName
+                    });
+                }
             }
             else
             {
-                FileLogger.LogError("[GradationBaker] SetPass failed.");
+                // Single pass for all submeshes
+                GL.Clear(true, true, clearColor);
+                if (mat.SetPass(0))
+                {
+                    Graphics.DrawMeshNow(mesh, Matrix4x4.identity);
+                }
+                
+                Texture2D mainTex = new Texture2D(res, res, TextureFormat.ARGB32, false);
+                mainTex.ReadPixels(new Rect(0, 0, res, res), 0, 0);
+                mainTex.Apply();
+                
+                result.Texture = mainTex;
             }
-            
-            // Read back
-            Texture2D result = new Texture2D(res, res, TextureFormat.ARGB32, false);
-            result.ReadPixels(new Rect(0, 0, res, res), 0, 0);
-            result.Apply();
 
             // Cleanup
             RenderTexture.active = null;
@@ -217,8 +284,20 @@ namespace GradationBaker.Execute
 
     public class BakeResult
     {
+        // Combined result (or main result if not split)
         public Texture2D Texture;
+        
+        // Split results (if applicable)
+        public List<SubMeshResult> SubMeshResults;
+        
         public string RendererName;
         public Renderer SourceRenderer;
+    }
+
+    public class SubMeshResult
+    {
+        public Texture2D Texture;
+        public string MaterialName;
+        public int SubMeshIndex;
     }
 }

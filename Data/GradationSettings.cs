@@ -30,6 +30,9 @@ namespace GradationBaker.Data
         public bool UseVertexColorMask = false;
         public bool InvertMask = false;
         
+        // Multi-material support
+        public bool SplitByMaterial = true;
+        
         // UI state
         public bool ShowDetails = false;
         
