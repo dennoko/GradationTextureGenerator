@@ -61,9 +61,11 @@ Select `Tools > Gradation Baker` from the menu to open the window.
  | Setting | Description |
  |---------|-------------|
  | Resolution | Output texture resolution |
- | Output to material's texture folder | Save to the same folder as the mesh's material textures |
+ | Output to material's texture folder | Save to the same folder as the mesh's material textures (ON by default) |
  | Save Path | Save destination when the above is OFF |
  | Background | Choose from Transparent/White/Black |
+
+> **Note**: After saving, the first saved texture will automatically be selected and revealed in the Project tab.
 
 ### Language Toggle
 

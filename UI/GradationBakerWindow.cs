@@ -628,6 +628,21 @@ namespace GradationBaker.UI
             {
                 string message = L("status_bake_success", savedCount);
                 _statusBar.Show(message, StatusBar.StatusType.Success);
+                
+                // Open the first saved texture in Project tab
+                if (savedPaths.Count > 0)
+                {
+                    string firstPath = savedPaths[0];
+                    string assetPath = "Assets" + firstPath.Substring(Application.dataPath.Length);
+                    
+                    // Ping the texture to reveal it in Project tab
+                    Object textureAsset = AssetDatabase.LoadAssetAtPath<Object>(assetPath);
+                    if (textureAsset != null)
+                    {
+                        EditorGUIUtility.PingObject(textureAsset);
+                        Selection.activeObject = textureAsset;
+                    }
+                }
             }
             else
             {
