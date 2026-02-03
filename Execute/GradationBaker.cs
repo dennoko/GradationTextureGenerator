@@ -146,6 +146,12 @@ namespace GradationBaker.Execute
             mat.SetInt("_UseVertexColorMask", entry.UseVertexColorMask ? 1 : 0);
             mat.SetInt("_InvertMask", entry.InvertMask ? 1 : 0);
 
+            // Jagged Settings
+            mat.SetInt("_JaggedType", (int)settings.JaggedPattern);
+            mat.SetFloat("_JaggedFreq", settings.JaggedFrequency);
+            mat.SetFloat("_JaggedAmp", settings.JaggedAmplitude);
+            mat.SetFloat("_JaggedPhase", settings.JaggedPhase);
+
             // Setup RenderTexture
             int res = settings.Resolution;
             RenderTexture rt = RenderTexture.GetTemporary(res, res, 0, RenderTextureFormat.ARGB32);

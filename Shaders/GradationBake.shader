@@ -51,7 +51,14 @@ Shader "Hidden/GradationBaker/Bake"
             
             int _UseMaskTexture;
             int _UseVertexColorMask;
+            int _UseVertexColorMask;
             int _InvertMask;
+
+            // Jagged Settings
+            int _JaggedType;          // 0:None, 1:Sine, 2:Triangle, 3:Noise
+            float _JaggedFreq;
+            float _JaggedAmp;
+            float _JaggedPhase;
 
             v2f vert (appdata v)
             {
@@ -80,7 +87,46 @@ Shader "Hidden/GradationBaker/Bake"
                 float3 boxLocalPos = mul(_WorldToBox, float4(worldPos, 1.0)).xyz;
                 
                 // In box local space, Y goes from -0.5 to 0.5 (normalized box)
-                float t = saturate(boxLocalPos.y + 0.5);
+                
+                // Jagged / Noise Offset
+                // We use box local X and Z to determine offset
+                float offset = 0.0;
+                
+                // Frequency is passed in _JaggedFreq
+                // Amplitude is passed in _JaggedAmp
+                // Phase is passed in _JaggedPhase
+                
+                if (_JaggedType == 1) // SineWave
+                {
+                    offset = sin((boxLocalPos.x * _JaggedFreq) + _JaggedPhase) * _JaggedAmp;
+                }
+                else if (_JaggedType == 2) // Triangle
+                {
+                    float tVal = (boxLocalPos.x * _JaggedFreq) + _JaggedPhase;
+                    float tri = abs(frac(tVal) - 0.5) * 4.0 - 1.0; // -1 to 1 triangle wave
+                    // or simpler: 2 * abs(2 * (t - floor(t + 0.5))) - 1 ??
+                    // Standard triangle 0..1: abs(frac(t) - 0.5) * 2
+                    // We want a wave.
+                    // Let's use: 1 - 2 * abs(round(t) - t) which is a simple triangle
+                    // But `frac` based is fine.
+                    // abs(frac(x) - 0.5) varies 0..0.5..0.  Map to -1..1 => *4 - 1
+                    
+                    offset = (abs(frac(tVal) - 0.5) * 4.0 - 1.0) * _JaggedAmp;
+                }
+                else if (_JaggedType == 3) // Noise
+                {
+                    // Simple hash based noise
+                    float2 p = float2(boxLocalPos.x * _JaggedFreq + _JaggedPhase, boxLocalPos.z * _JaggedFreq);
+                    float hash = frac(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453);
+                    offset = (hash * 2.0 - 1.0) * _JaggedAmp;
+                }
+                
+                // Apply offset to t calculation
+                // In box local space, Y goes from -0.5 to 0.5.
+                // We want to perturb the Y coordinate before calculating t.
+                // e.g. if we add offset to Y, we shift the gradient
+                
+                float t = saturate((boxLocalPos.y + offset) + 0.5);
                 
                 // Sample Gradient
                 fixed4 col = tex2D(_MainTex, float2(t, 0.5));

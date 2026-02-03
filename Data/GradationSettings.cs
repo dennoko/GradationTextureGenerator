@@ -11,6 +11,14 @@ namespace GradationBaker.Data
         Z = 3
     }
 
+    public enum JaggedType
+    {
+        None = 0,
+        SineWave = 1,
+        Triangle = 2,
+        Noise = 3
+    }
+
     public enum BackgroundColor
     {
         Transparent = 0,
@@ -61,6 +69,12 @@ namespace GradationBaker.Data
         // Mirror settings
         public bool UseMirror = false;
         public MirrorAxis MirrorAxis = MirrorAxis.X;
+
+        // Jagged / ZigZag Settings
+        public JaggedType JaggedPattern = JaggedType.None;
+        public float JaggedFrequency = 10.0f;
+        public float JaggedAmplitude = 0.1f;
+        public float JaggedPhase = 0.0f;
         
         // Cube-based gradation control
         public Vector3 BoxCenter = Vector3.zero;

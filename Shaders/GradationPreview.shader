@@ -60,6 +60,12 @@ Shader "Hidden/GradationBaker/Preview"
             int _UseMaskTexture;
             int _UseVertexColorMask;
             int _InvertMask;
+            
+            // Jagged Settings
+            int _JaggedType;
+            float _JaggedFreq;
+            float _JaggedAmp;
+            float _JaggedPhase;
 
             v2f vert (appdata v)
             {
@@ -102,7 +108,27 @@ Shader "Hidden/GradationBaker/Preview"
 
                 // --- Main Gradient ---
                 float3 boxLocalPos = mul(_WorldToBox, float4(i.worldPos, 1.0)).xyz;
-                float t = saturate(boxLocalPos.y + 0.5);
+                
+                // Jagged / Noise Offset
+                float offset = 0.0;
+                
+                if (_JaggedType == 1) // SineWave
+                {
+                    offset = sin((boxLocalPos.x * _JaggedFreq) + _JaggedPhase) * _JaggedAmp;
+                }
+                else if (_JaggedType == 2) // Triangle
+                {
+                    float tVal = (boxLocalPos.x * _JaggedFreq) + _JaggedPhase;
+                    offset = (abs(frac(tVal) - 0.5) * 4.0 - 1.0) * _JaggedAmp;
+                }
+                else if (_JaggedType == 3) // Noise
+                {
+                    float2 p = float2(boxLocalPos.x * _JaggedFreq + _JaggedPhase, boxLocalPos.z * _JaggedFreq);
+                    float hash = frac(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453);
+                    offset = (hash * 2.0 - 1.0) * _JaggedAmp;
+                }
+                
+                float t = saturate((boxLocalPos.y + offset) + 0.5);
                 fixed4 colMain = tex2D(_MainTex, float2(t, 0.5));
                 colMain.a *= mask;
 
@@ -111,7 +137,25 @@ Shader "Hidden/GradationBaker/Preview"
                 if (_UseMirror == 1)
                 {
                     float3 boxLocalPosMirror = mul(_WorldToBoxMirror, float4(i.worldPos, 1.0)).xyz;
-                    float tMirror = saturate(boxLocalPosMirror.y + 0.5);
+                    float offsetMirror = 0.0;
+                    
+                    if (_JaggedType == 1) // SineWave
+                    {
+                        offsetMirror = sin((boxLocalPosMirror.x * _JaggedFreq) + _JaggedPhase) * _JaggedAmp;
+                    }
+                    else if (_JaggedType == 2) // Triangle
+                    {
+                        float tVal = (boxLocalPosMirror.x * _JaggedFreq) + _JaggedPhase;
+                        offsetMirror = (abs(frac(tVal) - 0.5) * 4.0 - 1.0) * _JaggedAmp;
+                    }
+                    else if (_JaggedType == 3) // Noise
+                    {
+                        float2 p = float2(boxLocalPosMirror.x * _JaggedFreq + _JaggedPhase, boxLocalPosMirror.z * _JaggedFreq);
+                        float hash = frac(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453);
+                        offsetMirror = (hash * 2.0 - 1.0) * _JaggedAmp;
+                    }
+                    
+                    float tMirror = saturate((boxLocalPosMirror.y + offsetMirror) + 0.5);
                     colMirror = tex2D(_MainTex, float2(tMirror, 0.5));
                     colMirror.a *= mask;
                 }

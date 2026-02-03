@@ -67,6 +67,12 @@ namespace GradationBaker.UI
             _previewMaterial.SetInt("_UseMirror", isMirrorEnabled ? 1 : 0);
             _previewMaterial.SetMatrix("_WorldToBoxMirror", worldToBoxMirror);
 
+            // Jagged Settings
+            _previewMaterial.SetInt("_JaggedType", (int)settings.JaggedPattern);
+            _previewMaterial.SetFloat("_JaggedFreq", settings.JaggedFrequency);
+            _previewMaterial.SetFloat("_JaggedAmp", settings.JaggedAmplitude);
+            _previewMaterial.SetFloat("_JaggedPhase", settings.JaggedPhase);
+
             // Mask settings (per-mesh)
             _previewMaterial.SetInt("_UVChannel", entry.UVChannel);
             if (entry.MaskTexture != null)

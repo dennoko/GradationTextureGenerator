@@ -293,6 +293,31 @@ namespace GradationBaker.UI
 
             EditorGUILayout.Space(5);
             
+            // Jagged Gradation Section
+            EditorGUILayout.BeginVertical(_sectionStyle, GUILayout.ExpandWidth(true));
+            EditorGUILayout.LabelField("Jagged Gradation Settings", EditorStyles.boldLabel);
+            
+            EditorGUI.BeginChangeCheck();
+            
+            _settings.JaggedPattern = (JaggedType)EditorGUILayout.EnumPopup("Jagged Pattern", _settings.JaggedPattern);
+            
+            if (_settings.JaggedPattern != JaggedType.None)
+            {
+                    EditorGUI.indentLevel++;
+                    _settings.JaggedFrequency = EditorGUILayout.FloatField("Frequency", _settings.JaggedFrequency);
+                    _settings.JaggedAmplitude = EditorGUILayout.FloatField("Amplitude", _settings.JaggedAmplitude);
+                    _settings.JaggedPhase = EditorGUILayout.FloatField("Phase", _settings.JaggedPhase);
+                    EditorGUI.indentLevel--;
+            }
+            
+            if (EditorGUI.EndChangeCheck())
+            {
+                SceneView.RepaintAll();
+            }
+            EditorGUILayout.EndVertical();
+
+            EditorGUILayout.Space(5);
+            
             // Box Control Section
             _boxSettingsFoldout = EditorGUILayout.Foldout(_boxSettingsFoldout, L("box_control"), true, EditorStyles.foldoutHeader);
             if (_boxSettingsFoldout)
