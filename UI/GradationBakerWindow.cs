@@ -420,6 +420,13 @@ namespace GradationBaker.UI
                 string[] bgOptions = { L("bg_transparent"), L("bg_white"), L("bg_black") };
                 _settings.BgColor = (BackgroundColor)EditorGUILayout.Popup(L("bg_color"), (int)_settings.BgColor, bgOptions);
                 
+                // Edge Padding
+                _settings.EdgePaddingPixels = EditorGUILayout.IntSlider(L("edge_padding"), _settings.EdgePaddingPixels, 0, 16);
+                if (_settings.EdgePaddingPixels > 0)
+                {
+                    EditorGUILayout.HelpBox(L("edge_padding_help"), MessageType.Info);
+                }
+                
                 // Restore label width
                 EditorGUIUtility.labelWidth = originalLabelWidth;
                 

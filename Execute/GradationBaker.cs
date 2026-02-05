@@ -223,6 +223,25 @@ namespace GradationBaker.Execute
             Object.DestroyImmediate(mat);
             Object.DestroyImmediate(lut);
 
+            // Apply Edge Padding if enabled
+            if (settings.EdgePaddingPixels > 0)
+            {
+                if (result.SubMeshResults != null && result.SubMeshResults.Count > 0)
+                {
+                    foreach (var subRes in result.SubMeshResults)
+                    {
+                        if (subRes.Texture != null)
+                        {
+                            EdgePadding.Apply(subRes.Texture, settings.EdgePaddingPixels);
+                        }
+                    }
+                }
+                else if (result.Texture != null)
+                {
+                    EdgePadding.Apply(result.Texture, settings.EdgePaddingPixels);
+                }
+            }
+
             return result;
         }
 

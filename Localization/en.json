@@ -33,6 +33,8 @@
     "bg_transparent": "Transparent",
     "bg_white": "White",
     "bg_black": "Black",
+    "edge_padding": "Edge Padding",
+    "edge_padding_help": "Expands UV island edges to prevent seam artifacts from texture sampling",
     "opacity": "Opacity",
     "bake_and_save": "Bake & Save",
     "masking": "Masking (Default)",

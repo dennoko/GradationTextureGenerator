@@ -86,6 +86,9 @@ namespace GradationBaker.Data
         public string SavePath = "Assets/GeneratedGradation/output/";
         public bool UseTextureFolder = true; // Output to material's main texture folder
         public BackgroundColor BgColor = BackgroundColor.Transparent;
+        
+        // Edge Padding (UV island dilation)
+        public int EdgePaddingPixels = 4; // Default: 4, recommended: 1-16 pixels
 
         /// <summary>
         /// Gets mirrored box settings

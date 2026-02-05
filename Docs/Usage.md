@@ -62,11 +62,14 @@ Select `Tools > Gradation Baker` from the menu to open the window.
  | Setting | Description |
  |---------|-------------|
  | Resolution | Output texture resolution |
+ | Edge Padding | Expands UV island edges outwards (0-16px) to prevent seam artifacts during sampling |
  | Output to material's texture folder | Save to the same folder as the mesh's material textures (ON by default) |
  | Save Path | Save destination when the above is OFF |
  | Background | Choose from Transparent/White/Black |
 
-> **Note**: After saving, the first saved texture will automatically be selected and revealed in the Project tab.
+ > **Tip**: If you notice "seams" due to MIP mapping or texture sampling, setting Edge Padding to 4px or higher is recommended.
+
+ > **Note**: After saving, the first saved texture will automatically be selected and revealed in the Project tab.
 
 ### Language Toggle
 
