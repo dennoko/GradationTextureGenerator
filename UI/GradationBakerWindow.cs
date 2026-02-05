@@ -248,23 +248,9 @@ namespace GradationBaker.UI
                 EditorGUILayout.EndVertical();
             }
 
-            if (_settings.MeshEntries.Count == 0 || _settings.GetPrimaryRenderer() == null)
-            {
-                EditorGUILayout.BeginVertical(GUILayout.ExpandWidth(true));
-                EditorGUILayout.Space(10);
-                EditorGUILayout.LabelField(L("help_title"), EditorStyles.boldLabel);
-                EditorGUILayout.HelpBox(L("help_usage"), MessageType.Info);
-                EditorGUILayout.HelpBox(L("help_warning"), MessageType.Warning);
-                EditorGUILayout.EndVertical();
-                EditorGUILayout.EndScrollView();
-                _statusBar.Draw();
-                if (_statusBar.NeedsRepaint()) Repaint();
-                return;
-            }
-
             EditorGUILayout.Space(5);
             
-            // Gradient Section
+            // Gradient Section (always visible, even without mesh)
             _gradientFoldout = EditorGUILayout.Foldout(_gradientFoldout, L("gradient"), true, EditorStyles.foldoutHeader);
             if (_gradientFoldout)
             {
@@ -289,6 +275,20 @@ namespace GradationBaker.UI
                 EditorGUILayout.EndHorizontal();
                 
                 EditorGUILayout.EndVertical();
+            }
+
+            if (_settings.MeshEntries.Count == 0 || _settings.GetPrimaryRenderer() == null)
+            {
+                EditorGUILayout.BeginVertical(GUILayout.ExpandWidth(true));
+                EditorGUILayout.Space(10);
+                EditorGUILayout.LabelField(L("help_title"), EditorStyles.boldLabel);
+                EditorGUILayout.HelpBox(L("help_usage"), MessageType.Info);
+                EditorGUILayout.HelpBox(L("help_warning"), MessageType.Warning);
+                EditorGUILayout.EndVertical();
+                EditorGUILayout.EndScrollView();
+                _statusBar.Draw();
+                if (_statusBar.NeedsRepaint()) Repaint();
+                return;
             }
 
             EditorGUILayout.Space(5);
