@@ -36,7 +36,7 @@ namespace GradationBaker.UI
         private GUIStyle _sectionStyle;
         private bool _stylesInitialized = false;
         
-        [MenuItem("Tools/Gradation Baker")]
+        [MenuItem("dennokoworks/Gradation Baker")]
         public static void ShowWindow()
         {
             var window = GetWindow<GradationBakerWindow>();

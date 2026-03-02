@@ -4,7 +4,7 @@
 
 ### 1. Open the Tool
 
-Select `Tools > Gradation Baker` from the menu to open the window.
+Select `dennokoworks > Gradation Baker` from the menu to open the window.
 
 ### 2. Add Meshes
  
@@ -26,10 +26,10 @@ Select `Tools > Gradation Baker` from the menu to open the window.
  
  Use the box handles in the Scene View to adjust the gradient range and direction:
  
+ - **Shape**: Choose between `Linear` (directional gradient) and `Spherical` (radial gradient from center).
  - **Rotation Handle**: Change gradient direction
- - **Position Handle**: Move the entire box
- - **Red Cone (bottom)**: Gradient start position (0%)
- - **Green Cone (top)**: Gradient end position (100%)
+ - **Position Handle**: Move the entire box or sphere center
+ - **Red/Green Cones**: Adjust dimensions (Height for Linear, Width/Height/Depth for Spherical). The gradient starts at 0% in the center/bottom and ends at 100% at the surface/top.
  
  Click "Fit to Mesh Bounds" to automatically fit to the mesh's bounding box.
  
