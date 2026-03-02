@@ -55,6 +55,9 @@ Shader "Hidden/GradationBaker/Preview"
             int _UseMirror;
             float4x4 _WorldToBoxMirror;
             
+            // Shape: 0=Linear, 1=Spherical
+            int _Shape;
+            
             // UV Channel and Mask settings
             int _UVChannel;
             int _UseMaskTexture;
@@ -102,7 +105,15 @@ Shader "Hidden/GradationBaker/Preview"
 
                 // --- Main Gradient ---
                 float3 boxLocalPos = mul(_WorldToBox, float4(i.worldPos, 1.0)).xyz;
-                float t = saturate(boxLocalPos.y + 0.5);
+                float t;
+                if (_Shape == 1)
+                {
+                    t = saturate(length(boxLocalPos) * 2.0);
+                }
+                else
+                {
+                    t = saturate(boxLocalPos.y + 0.5);
+                }
                 fixed4 colMain = tex2D(_MainTex, float2(t, 0.5));
                 colMain.a *= mask;
 
@@ -111,7 +122,15 @@ Shader "Hidden/GradationBaker/Preview"
                 if (_UseMirror == 1)
                 {
                     float3 boxLocalPosMirror = mul(_WorldToBoxMirror, float4(i.worldPos, 1.0)).xyz;
-                    float tMirror = saturate(boxLocalPosMirror.y + 0.5);
+                    float tMirror;
+                    if (_Shape == 1)
+                    {
+                        tMirror = saturate(length(boxLocalPosMirror) * 2.0);
+                    }
+                    else
+                    {
+                        tMirror = saturate(boxLocalPosMirror.y + 0.5);
+                    }
                     colMirror = tex2D(_MainTex, float2(tMirror, 0.5));
                     colMirror.a *= mask;
                 }

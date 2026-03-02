@@ -49,6 +49,9 @@ Shader "Hidden/GradationBaker/Bake"
             // UV Channel selection
             int _UVChannel;
             
+            // Shape: 0=Linear, 1=Spherical
+            int _Shape;
+            
             int _UseMaskTexture;
             int _UseVertexColorMask;
             int _InvertMask;
@@ -79,8 +82,18 @@ Shader "Hidden/GradationBaker/Bake"
                 float3 worldPos = mul(_ObjectToWorld, float4(i.objectPos, 1.0)).xyz;
                 float3 boxLocalPos = mul(_WorldToBox, float4(worldPos, 1.0)).xyz;
                 
-                // In box local space, Y goes from -0.5 to 0.5 (normalized box)
-                float t = saturate(boxLocalPos.y + 0.5);
+                // Calculate t based on shape
+                float t;
+                if (_Shape == 1)
+                {
+                    // Spherical: distance from center, scaled so box surface = 1.0
+                    t = saturate(length(boxLocalPos) * 2.0);
+                }
+                else
+                {
+                    // Linear: Y axis from -0.5 to 0.5
+                    t = saturate(boxLocalPos.y + 0.5);
+                }
                 
                 // Sample Gradient
                 fixed4 col = tex2D(_MainTex, float2(t, 0.5));

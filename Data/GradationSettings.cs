@@ -18,6 +18,12 @@ namespace GradationBaker.Data
         Black = 2
     }
 
+    public enum GradationShape
+    {
+        Linear = 0,
+        Spherical = 1
+    }
+
     [System.Serializable]
     public class MeshEntry
     {
@@ -62,17 +68,25 @@ namespace GradationBaker.Data
         public bool UseMirror = false;
         public MirrorAxis MirrorAxis = MirrorAxis.X;
         
+        // Gradation shape (Linear or Spherical)
+        public GradationShape Shape = GradationShape.Linear;
+        
         // Cube-based gradation control
         public Vector3 BoxCenter = Vector3.zero;
         public Quaternion BoxRotation = Quaternion.identity;
         public float BoxHeight = 1f;
         
-        // Fixed visual dimensions for the cube handle
-        public const float BoxWidth = 0.5f;
-        public const float BoxDepth = 0.5f;
+        // Box dimensions (mutable for 3-axis ellipsoidal control)
+        public float BoxWidth = 0.5f;
+        public float BoxDepth = 0.5f;
 
         // Computed properties for shader compatibility
         public Vector3 GradientDirection => BoxRotation * Vector3.up;
+        
+        /// <summary>
+        /// Returns the box scale vector used for matrix construction.
+        /// </summary>
+        public Vector3 BoxScale => new Vector3(BoxWidth, BoxHeight, BoxDepth);
         
         // Min/Max in world space along the gradient direction from box center
         public float MinRange => Vector3.Dot(BoxCenter - BoxRotation * Vector3.up * (BoxHeight / 2f), GradientDirection);
@@ -160,6 +174,12 @@ namespace GradationBaker.Data
         {
             if (MeshEntries.Count == 0) return;
             
+            if (Shape == GradationShape.Spherical)
+            {
+                FitSphericalBounds();
+                return;
+            }
+            
             Vector3 dir = GradientDirection.normalized;
             float globalMin = float.MaxValue;
             float globalMax = float.MinValue;
@@ -200,6 +220,69 @@ namespace GradationBaker.Data
             Vector3 projectedCenter = Vector3.Project(globalCenter, dir);
             Vector3 perpendicularOffset = globalCenter - projectedCenter;
             BoxCenter = dir * midT + perpendicularOffset;
+        }
+        
+        /// <summary>
+        /// Fits a bounding sphere to all mesh vertices for Spherical mode.
+        /// Computes the centroid and the maximum distance from it, then sets
+        /// BoxWidth/BoxHeight/BoxDepth to the diameter (uniform sphere).
+        /// </summary>
+        private void FitSphericalBounds()
+        {
+            Vector3 globalCenter = Vector3.zero;
+            int totalVertices = 0;
+            
+            // First pass: compute centroid
+            foreach (var entry in MeshEntries)
+            {
+                Renderer renderer = entry.ActiveRenderer;
+                if (renderer == null) continue;
+                
+                Mesh mesh = GetMesh(renderer);
+                if (mesh == null) continue;
+                
+                Vector3[] vertices = mesh.vertices;
+                Transform transform = renderer.transform;
+                
+                foreach (var v in vertices)
+                {
+                    globalCenter += transform.TransformPoint(v);
+                    totalVertices++;
+                }
+            }
+            
+            if (totalVertices == 0) return;
+            globalCenter /= totalVertices;
+            
+            // Second pass: find maximum distance from centroid
+            float maxDist = 0f;
+            foreach (var entry in MeshEntries)
+            {
+                Renderer renderer = entry.ActiveRenderer;
+                if (renderer == null) continue;
+                
+                Mesh mesh = GetMesh(renderer);
+                if (mesh == null) continue;
+                
+                Vector3[] vertices = mesh.vertices;
+                Transform transform = renderer.transform;
+                
+                foreach (var v in vertices)
+                {
+                    float dist = Vector3.Distance(globalCenter, transform.TransformPoint(v));
+                    if (dist > maxDist) maxDist = dist;
+                }
+            }
+            
+            if (maxDist < 0.0001f) maxDist = 1f;
+            
+            // Diameter = maxDist * 2, sets uniform scale
+            float diameter = maxDist * 2f;
+            BoxCenter = globalCenter;
+            BoxWidth = diameter;
+            BoxHeight = diameter;
+            BoxDepth = diameter;
+            BoxRotation = Quaternion.identity;
         }
 
         private static Mesh GetMesh(Renderer renderer)

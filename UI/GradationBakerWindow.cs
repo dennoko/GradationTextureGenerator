@@ -310,6 +310,12 @@ namespace GradationBaker.UI
                 EditorGUILayout.Space(3);
                 
                 EditorGUI.BeginChangeCheck();
+                
+                // Shape Selection
+                string[] shapeOptions = { L("shape_linear"), L("shape_spherical") };
+                _settings.Shape = (GradationShape)EditorGUILayout.Popup(L("shape"), (int)_settings.Shape, shapeOptions);
+                EditorGUILayout.Space(2);
+                
                 Vector3 center = EditorGUILayout.Vector3Field(L("center"), _settings.BoxCenter);
                 
                 EditorGUILayout.BeginHorizontal();
@@ -324,16 +330,37 @@ namespace GradationBaker.UI
                     GUI.FocusControl(null); // Clear focus to update fields
                 }
                 EditorGUILayout.EndHorizontal();
-                
-                if (resetClicked) return; // Skip updating from fields this frame to prevent overwriting with old values
 
-                float height = EditorGUILayout.FloatField(L("height"), _settings.BoxHeight);
+                float height = _settings.BoxHeight;
+                Vector3 size = _settings.BoxScale;
+                
+                if (_settings.Shape == GradationShape.Linear)
+                {
+                    height = EditorGUILayout.FloatField(L("height"), _settings.BoxHeight);
+                }
+                else
+                {
+                    size = EditorGUILayout.Vector3Field(L("size"), _settings.BoxScale);
+                }
                 
                 if (EditorGUI.EndChangeCheck())
                 {
-                    _settings.BoxCenter = RoundVector3(center, 2);
-                    _settings.BoxRotation = Quaternion.Euler(RoundVector3(euler, 2));
-                    _settings.BoxHeight = Mathf.Max(0.01f, Mathf.Round(height * 100f) / 100f);
+                    if (!resetClicked)
+                    {
+                        _settings.BoxCenter = RoundVector3(center, 2);
+                        _settings.BoxRotation = Quaternion.Euler(RoundVector3(euler, 2));
+                        
+                        if (_settings.Shape == GradationShape.Linear)
+                        {
+                            _settings.BoxHeight = Mathf.Max(0.01f, Mathf.Round(height * 100f) / 100f);
+                        }
+                        else
+                        {
+                            _settings.BoxWidth = Mathf.Max(0.01f, Mathf.Round(size.x * 100f) / 100f);
+                            _settings.BoxHeight = Mathf.Max(0.01f, Mathf.Round(size.y * 100f) / 100f);
+                            _settings.BoxDepth = Mathf.Max(0.01f, Mathf.Round(size.z * 100f) / 100f);
+                        }
+                    }
                     SceneView.RepaintAll();
                 }
                 

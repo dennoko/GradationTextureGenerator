@@ -30,15 +30,20 @@ namespace GradationBaker.UI
             
             Vector3 center = settings.BoxCenter;
             Quaternion rotation = settings.BoxRotation;
-            float halfHeight = settings.BoxHeight / 2f;
-            
-            Vector3 upDir = rotation * Vector3.up;
-            Vector3 topPos = center + upDir * halfHeight;
-            Vector3 bottomPos = center - upDir * halfHeight;
             
             float handleSize = HandleUtility.GetHandleSize(center);
 
-            // 1. Rotation Handle at center
+            // 1. Position Handle at center
+            EditorGUI.BeginChangeCheck();
+            Vector3 newCenter = Handles.PositionHandle(center, rotation);
+            if (EditorGUI.EndChangeCheck())
+            {
+                if (targetTransform != null) Undo.RecordObject(targetTransform, "Move Gradation Box");
+                settings.BoxCenter = newCenter;
+                changeType |= HandleChangeType.Position;
+            }
+            
+            // 2. Rotation Handle at center
             EditorGUI.BeginChangeCheck();
             Quaternion newRotation = Handles.RotationHandle(rotation, center);
             if (EditorGUI.EndChangeCheck())
@@ -48,81 +53,117 @@ namespace GradationBaker.UI
                 changeType |= HandleChangeType.Rotation;
             }
 
-
-            // 2. Position Handle at center
-            EditorGUI.BeginChangeCheck();
-            Vector3 newCenter = Handles.PositionHandle(center, rotation);
-            if (EditorGUI.EndChangeCheck())
+            if (settings.Shape == GradationShape.Linear)
             {
-                if (targetTransform != null) Undo.RecordObject(targetTransform, "Move Gradation Box");
-                settings.BoxCenter = newCenter;
-                changeType |= HandleChangeType.Position;
+                changeType |= DrawDimensionHandles(settings, targetTransform, Vector3.up, settings.BoxHeight, val => settings.BoxHeight = val, handleSize, TopHandleColor, BottomHandleColor);
+                
+                // Draw labels for Linear
+                Vector3 upDir = rotation * Vector3.up;
+                Vector3 topPos = center + upDir * (settings.BoxHeight / 2f);
+                Vector3 bottomPos = center - upDir * (settings.BoxHeight / 2f);
+                DrawLabels(settings, topPos, bottomPos, handleSize);
+            }
+            else
+            {
+                // Spherical mode uses 6 slider handles for 3 axes
+                changeType |= DrawDimensionHandles(settings, targetTransform, Vector3.right, settings.BoxWidth, val => settings.BoxWidth = val, handleSize, TopHandleColor, BottomHandleColor);
+                changeType |= DrawDimensionHandles(settings, targetTransform, Vector3.up, settings.BoxHeight, val => settings.BoxHeight = val, handleSize, TopHandleColor, BottomHandleColor);
+                changeType |= DrawDimensionHandles(settings, targetTransform, Vector3.forward, settings.BoxDepth, val => settings.BoxDepth = val, handleSize, TopHandleColor, BottomHandleColor);
             }
 
-            // 3. Top height slider (Max)
-            Handles.color = TopHandleColor;
-            EditorGUI.BeginChangeCheck();
-            Vector3 newTopPos = Handles.Slider(topPos, upDir, handleSize * 0.15f, Handles.ConeHandleCap, 0f);
-            if (EditorGUI.EndChangeCheck())
-            {
-                if (targetTransform != null) Undo.RecordObject(targetTransform, "Adjust Gradation Top");
-                // Calculate new height while keeping bottom fixed
-                float newTopDistance = Vector3.Dot(newTopPos - bottomPos, upDir);
-                if (newTopDistance > 0.01f)
-                {
-                    settings.BoxHeight = newTopDistance;
-                    settings.BoxCenter = bottomPos + upDir * (newTopDistance / 2f);
-                    changeType |= HandleChangeType.Height;
-                }
-            }
-
-            // 4. Bottom height slider (Min)
-            Handles.color = BottomHandleColor;
-            EditorGUI.BeginChangeCheck();
-            Vector3 newBottomPos = Handles.Slider(bottomPos, -upDir, handleSize * 0.15f, Handles.ConeHandleCap, 0f);
-            if (EditorGUI.EndChangeCheck())
-            {
-                if (targetTransform != null) Undo.RecordObject(targetTransform, "Adjust Gradation Bottom");
-                // Calculate new height while keeping top fixed
-                float newBottomDistance = Vector3.Dot(topPos - newBottomPos, upDir);
-                if (newBottomDistance > 0.01f)
-                {
-                    settings.BoxHeight = newBottomDistance;
-                    settings.BoxCenter = newBottomPos + upDir * (newBottomDistance / 2f);
-                    changeType |= HandleChangeType.Height;
-                }
-            }
-
-            // 5. Draw cube visualization
-            DrawCubeVisualization(settings);
-            
-            // 6. Draw labels
-            DrawLabels(settings, topPos, bottomPos, handleSize);
+            // 5. Draw visualization
+            DrawVisualization(settings);
             
             return changeType;
         }
 
-        private void DrawCubeVisualization(GradationSettings settings)
+        private HandleChangeType DrawDimensionHandles(GradationSettings settings, Transform targetTransform, Vector3 localAxis, float currentDimension, System.Action<float> setDimension, float handleSize, Color posColor, Color negColor)
+        {
+            HandleChangeType changeType = HandleChangeType.None;
+            Vector3 center = settings.BoxCenter;
+            Vector3 worldAxis = settings.BoxRotation * localAxis;
+            float halfDim = currentDimension / 2f;
+            Vector3 posPos = center + worldAxis * halfDim;
+            Vector3 negPos = center - worldAxis * halfDim;
+            
+            // Positive side slider
+            Handles.color = posColor;
+            EditorGUI.BeginChangeCheck();
+            Vector3 newPosPos = Handles.Slider(posPos, worldAxis, handleSize * 0.15f, Handles.ConeHandleCap, 0f);
+            if (EditorGUI.EndChangeCheck())
+            {
+                if (targetTransform != null) Undo.RecordObject(targetTransform, "Adjust Gradation Handle");
+                float newDistance = Vector3.Dot(newPosPos - negPos, worldAxis);
+                if (newDistance > 0.01f)
+                {
+                    setDimension(newDistance);
+                    settings.BoxCenter = negPos + worldAxis * (newDistance / 2f);
+                    changeType |= HandleChangeType.Height;
+                }
+            }
+
+            // Negative side slider
+            Handles.color = negColor;
+            EditorGUI.BeginChangeCheck();
+            Vector3 newNegPos = Handles.Slider(negPos, -worldAxis, handleSize * 0.15f, Handles.ConeHandleCap, 0f);
+            if (EditorGUI.EndChangeCheck())
+            {
+                if (targetTransform != null) Undo.RecordObject(targetTransform, "Adjust Gradation Handle");
+                float newDistance = Vector3.Dot(posPos - newNegPos, worldAxis);
+                if (newDistance > 0.01f)
+                {
+                    setDimension(newDistance);
+                    settings.BoxCenter = newNegPos + worldAxis * (newDistance / 2f);
+                    changeType |= HandleChangeType.Height;
+                }
+            }
+            return changeType;
+        }
+
+        private void DrawVisualization(GradationSettings settings)
         {
             Vector3 center = settings.BoxCenter;
             Quaternion rotation = settings.BoxRotation;
-            Vector3 size = new Vector3(GradationSettings.BoxWidth, settings.BoxHeight, GradationSettings.BoxDepth);
+            Vector3 size = settings.BoxScale;
             
             Matrix4x4 oldMatrix = Handles.matrix;
-            Handles.matrix = Matrix4x4.TRS(center, rotation, Vector3.one);
             
-            // Draw semi-transparent cube
-            Handles.color = BoxColor;
-            Handles.DrawWireCube(Vector3.zero, size);
-            
-            // Draw solid outline
-            Handles.color = BoxOutlineColor;
-            DrawBoxEdges(size);
-            
-            // Draw gradient direction arrow
-            Handles.color = Color.yellow;
-            float arrowLength = settings.BoxHeight * 0.3f;
-            Handles.ArrowHandleCap(0, Vector3.zero, Quaternion.LookRotation(Vector3.up), arrowLength, EventType.Repaint);
+            if (settings.Shape == GradationShape.Linear)
+            {
+                Handles.matrix = Matrix4x4.TRS(center, rotation, Vector3.one);
+                
+                // Draw semi-transparent cube
+                Handles.color = BoxColor;
+                Handles.DrawWireCube(Vector3.zero, size);
+                
+                // Draw solid outline
+                Handles.color = BoxOutlineColor;
+                DrawBoxEdges(size);
+                
+                // Draw gradient direction arrow
+                Handles.color = Color.yellow;
+                float arrowLength = settings.BoxHeight * 0.3f;
+                Handles.ArrowHandleCap(0, Vector3.zero, Quaternion.LookRotation(Vector3.up), arrowLength, EventType.Repaint);
+            }
+            else
+            {
+                // Draw Ellipsoid (Spherical mode)
+                // Use scale of bounds, radius 0.5 makes diameter = bounds
+                Handles.matrix = Matrix4x4.TRS(center, rotation, size);
+                
+                Handles.color = BoxOutlineColor;
+                Handles.DrawWireDisc(Vector3.zero, Vector3.up, 0.5f);
+                Handles.DrawWireDisc(Vector3.zero, Vector3.right, 0.5f);
+                Handles.DrawWireDisc(Vector3.zero, Vector3.forward, 0.5f);
+                
+                Handles.color = new Color(BoxOutlineColor.r, BoxOutlineColor.g, BoxOutlineColor.b, 0.2f);
+                Handles.DrawWireCube(Vector3.zero, Vector3.one);
+                
+                // Draw "Up" arrow indicator for primary gradient direction from center
+                Handles.matrix = Matrix4x4.TRS(center, rotation, Vector3.one);
+                Handles.color = Color.yellow;
+                Handles.ArrowHandleCap(0, Vector3.zero, Quaternion.LookRotation(Vector3.up), size.y * 0.3f, EventType.Repaint);
+            }
             
             Handles.matrix = oldMatrix;
         }
@@ -216,7 +257,7 @@ namespace GradationBaker.UI
             
             var (mirrorCenter, mirrorRotation) = settings.GetMirroredBox(transform);
             
-            Vector3 size = new Vector3(GradationSettings.BoxWidth, settings.BoxHeight, GradationSettings.BoxDepth);
+            Vector3 size = settings.BoxScale;
             
             Matrix4x4 oldMatrix = Handles.matrix;
             Handles.matrix = Matrix4x4.TRS(mirrorCenter, mirrorRotation, Vector3.one);

@@ -36,7 +36,7 @@ namespace GradationBaker.UI
             Matrix4x4 boxMatrix = Matrix4x4.TRS(
                 settings.BoxCenter, 
                 settings.BoxRotation, 
-                new Vector3(GradationSettings.BoxWidth, settings.BoxHeight, GradationSettings.BoxDepth)
+                settings.BoxScale
             );
             Matrix4x4 worldToBox = boxMatrix.inverse;
             Matrix4x4 localToWorld = renderer.localToWorldMatrix;
@@ -51,7 +51,7 @@ namespace GradationBaker.UI
                 Matrix4x4 mirrorBoxMatrix = Matrix4x4.TRS(
                     mirrorCenter, 
                     mirrorRot, 
-                    new Vector3(GradationSettings.BoxWidth, settings.BoxHeight, GradationSettings.BoxDepth)
+                    settings.BoxScale
                 );
                 worldToBoxMirror = mirrorBoxMatrix.inverse;
             }
@@ -62,6 +62,7 @@ namespace GradationBaker.UI
             _previewMaterial.SetMatrix("_ObjectToWorld", localToWorld);
             _previewMaterial.SetFloat("_BoxHeight", settings.BoxHeight);
             _previewMaterial.SetFloat("_Opacity", settings.PreviewOpacity);
+            _previewMaterial.SetInt("_Shape", (int)settings.Shape);
             
             // Mirror settings
             _previewMaterial.SetInt("_UseMirror", isMirrorEnabled ? 1 : 0);

@@ -121,13 +121,14 @@ namespace GradationBaker.Execute
             Matrix4x4 boxMatrix = Matrix4x4.TRS(
                 boxCenter, 
                 boxRotation, 
-                new Vector3(GradationSettings.BoxWidth, settings.BoxHeight, GradationSettings.BoxDepth)
+                settings.BoxScale
             );
             Matrix4x4 worldToBox = boxMatrix.inverse;
             Matrix4x4 objectToWorld = renderer.localToWorldMatrix;
 
             mat.SetMatrix("_WorldToBox", worldToBox);
             mat.SetMatrix("_ObjectToWorld", objectToWorld);
+            mat.SetInt("_Shape", (int)settings.Shape);
             
             // UV Channel (per-mesh)
             mat.SetInt("_UVChannel", entry.UVChannel);
