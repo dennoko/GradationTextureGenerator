@@ -24,7 +24,7 @@ namespace GradationBaker.UI
         private static readonly Color TopHandleColor = new Color(1f, 0.3f, 0.3f, 1f);
         private static readonly Color BottomHandleColor = new Color(0.3f, 1f, 0.3f, 1f);
 
-        public HandleChangeType DrawHandle(GradationSettings settings, Transform targetTransform)
+        public HandleChangeType DrawHandle(GradationSettings settings, Object undoTarget)
         {
             HandleChangeType changeType = HandleChangeType.None;
             
@@ -38,7 +38,7 @@ namespace GradationBaker.UI
             Vector3 newCenter = Handles.PositionHandle(center, rotation);
             if (EditorGUI.EndChangeCheck())
             {
-                if (targetTransform != null) Undo.RecordObject(targetTransform, "Move Gradation Box");
+                if (undoTarget != null) Undo.RecordObject(undoTarget, "Move Gradation Box");
                 settings.BoxCenter = newCenter;
                 changeType |= HandleChangeType.Position;
             }
@@ -48,14 +48,14 @@ namespace GradationBaker.UI
             Quaternion newRotation = Handles.RotationHandle(rotation, center);
             if (EditorGUI.EndChangeCheck())
             {
-                if (targetTransform != null) Undo.RecordObject(targetTransform, "Rotate Gradation Box");
+                if (undoTarget != null) Undo.RecordObject(undoTarget, "Rotate Gradation Box");
                 settings.BoxRotation = newRotation;
                 changeType |= HandleChangeType.Rotation;
             }
 
             if (settings.Shape == GradationShape.Linear)
             {
-                changeType |= DrawDimensionHandles(settings, targetTransform, Vector3.up, settings.BoxHeight, val => settings.BoxHeight = val, handleSize, TopHandleColor, BottomHandleColor);
+                changeType |= DrawDimensionHandles(settings, undoTarget, Vector3.up, settings.BoxHeight, val => settings.BoxHeight = val, handleSize, TopHandleColor, BottomHandleColor);
                 
                 // Draw labels for Linear
                 Vector3 upDir = rotation * Vector3.up;
@@ -66,9 +66,9 @@ namespace GradationBaker.UI
             else
             {
                 // Spherical mode uses 6 slider handles for 3 axes
-                changeType |= DrawDimensionHandles(settings, targetTransform, Vector3.right, settings.BoxWidth, val => settings.BoxWidth = val, handleSize, TopHandleColor, BottomHandleColor);
-                changeType |= DrawDimensionHandles(settings, targetTransform, Vector3.up, settings.BoxHeight, val => settings.BoxHeight = val, handleSize, TopHandleColor, BottomHandleColor);
-                changeType |= DrawDimensionHandles(settings, targetTransform, Vector3.forward, settings.BoxDepth, val => settings.BoxDepth = val, handleSize, TopHandleColor, BottomHandleColor);
+                changeType |= DrawDimensionHandles(settings, undoTarget, Vector3.right, settings.BoxWidth, val => settings.BoxWidth = val, handleSize, TopHandleColor, BottomHandleColor);
+                changeType |= DrawDimensionHandles(settings, undoTarget, Vector3.up, settings.BoxHeight, val => settings.BoxHeight = val, handleSize, TopHandleColor, BottomHandleColor);
+                changeType |= DrawDimensionHandles(settings, undoTarget, Vector3.forward, settings.BoxDepth, val => settings.BoxDepth = val, handleSize, TopHandleColor, BottomHandleColor);
             }
 
             // 5. Draw visualization
@@ -77,7 +77,7 @@ namespace GradationBaker.UI
             return changeType;
         }
 
-        private HandleChangeType DrawDimensionHandles(GradationSettings settings, Transform targetTransform, Vector3 localAxis, float currentDimension, System.Action<float> setDimension, float handleSize, Color posColor, Color negColor)
+        private HandleChangeType DrawDimensionHandles(GradationSettings settings, Object undoTarget, Vector3 localAxis, float currentDimension, System.Action<float> setDimension, float handleSize, Color posColor, Color negColor)
         {
             HandleChangeType changeType = HandleChangeType.None;
             Vector3 center = settings.BoxCenter;
@@ -92,7 +92,7 @@ namespace GradationBaker.UI
             Vector3 newPosPos = Handles.Slider(posPos, worldAxis, handleSize * 0.15f, Handles.ConeHandleCap, 0f);
             if (EditorGUI.EndChangeCheck())
             {
-                if (targetTransform != null) Undo.RecordObject(targetTransform, "Adjust Gradation Handle");
+                if (undoTarget != null) Undo.RecordObject(undoTarget, "Adjust Gradation Handle");
                 float newDistance = Vector3.Dot(newPosPos - negPos, worldAxis);
                 if (newDistance > 0.01f)
                 {
@@ -108,7 +108,7 @@ namespace GradationBaker.UI
             Vector3 newNegPos = Handles.Slider(negPos, -worldAxis, handleSize * 0.15f, Handles.ConeHandleCap, 0f);
             if (EditorGUI.EndChangeCheck())
             {
-                if (targetTransform != null) Undo.RecordObject(targetTransform, "Adjust Gradation Handle");
+                if (undoTarget != null) Undo.RecordObject(undoTarget, "Adjust Gradation Handle");
                 float newDistance = Vector3.Dot(posPos - newNegPos, worldAxis);
                 if (newDistance > 0.01f)
                 {
