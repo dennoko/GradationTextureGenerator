@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 using GradationBaker.Data;
+using System.Collections.Generic;
 
 namespace GradationBaker.UI
 {
@@ -10,15 +11,20 @@ namespace GradationBaker.UI
         private Material _previewMaterial;
         private Texture2D _lutTexture;
 
+        private class ProxyEntry
+        {
+            public GameObject ProxyObject;
+            public MeshFilter MeshFilter;
+            public MeshRenderer MeshRenderer;
+            public SkinnedMeshRenderer SkinnedRenderer;
+        }
+
+        private readonly Dictionary<Renderer, ProxyEntry> _proxies = new Dictionary<Renderer, ProxyEntry>();
 
         public void UpdatePreview(GradationSettings settings, MeshEntry entry)
         {
-            if (Event.current.type != EventType.Repaint) return;
             Renderer renderer = entry.ActiveRenderer;
             if (renderer == null) return;
-            
-            Mesh mesh = GetMesh(renderer);
-            if (mesh == null) return;
             
             // Lazy Init Material
             if (_previewMaterial == null)
@@ -39,7 +45,6 @@ namespace GradationBaker.UI
                 settings.BoxScale
             );
             Matrix4x4 worldToBox = boxMatrix.inverse;
-            Matrix4x4 localToWorld = renderer.localToWorldMatrix;
 
             // Calculate Mirror Matrix
             bool isMirrorEnabled = settings.UseMirror && settings.MirrorAxis != MirrorAxis.None;
@@ -56,50 +61,144 @@ namespace GradationBaker.UI
                 worldToBoxMirror = mirrorBoxMatrix.inverse;
             }
 
-            // Set shader properties
+            // Set global shader properties on Material
             _previewMaterial.SetTexture("_MainTex", _lutTexture);
             _previewMaterial.SetMatrix("_WorldToBox", worldToBox);
-            _previewMaterial.SetMatrix("_ObjectToWorld", localToWorld);
             _previewMaterial.SetFloat("_BoxHeight", settings.BoxHeight);
-            _previewMaterial.SetFloat("_Opacity", settings.PreviewOpacity);
             _previewMaterial.SetInt("_Shape", (int)settings.Shape);
+            _previewMaterial.SetInt("_BlendMode", (int)settings.BlendMode);
             
-            // Mirror settings
             _previewMaterial.SetInt("_UseMirror", isMirrorEnabled ? 1 : 0);
             _previewMaterial.SetMatrix("_WorldToBoxMirror", worldToBoxMirror);
 
-            // Mask settings (per-mesh)
-            _previewMaterial.SetInt("_UVChannel", entry.UVChannel);
+            // Fetch or create Proxy
+            if (!_proxies.TryGetValue(renderer, out var proxy) || proxy.ProxyObject == null)
+            {
+                proxy = CreateProxy(renderer);
+                if (proxy == null) return;
+                _proxies[renderer] = proxy;
+            }
+
+            // Sync Transform for MeshRenderer only (Skinned is child)
+            if (proxy.MeshRenderer != null)
+            {
+                proxy.ProxyObject.transform.position = renderer.transform.position;
+                proxy.ProxyObject.transform.rotation = renderer.transform.rotation;
+                proxy.ProxyObject.transform.localScale = renderer.transform.lossyScale;
+            }
+
+            // Use MaterialPropertyBlock for per-mesh settings
+            MaterialPropertyBlock block = new MaterialPropertyBlock();
+            block.SetInt("_UVChannel", entry.UVChannel);
             if (entry.MaskTexture != null)
             {
-                _previewMaterial.SetTexture("_MaskTex", entry.MaskTexture);
-                _previewMaterial.SetInt("_UseMaskTexture", 1);
+                block.SetTexture("_MaskTex", entry.MaskTexture);
+                block.SetInt("_UseMaskTexture", 1);
             }
             else
             {
-                _previewMaterial.SetInt("_UseMaskTexture", 0);
+                block.SetInt("_UseMaskTexture", 0);
             }
-            _previewMaterial.SetInt("_UseVertexColorMask", entry.UseVertexColorMask ? 1 : 0);
-            _previewMaterial.SetInt("_InvertMask", entry.InvertMask ? 1 : 0);
+            block.SetInt("_UseVertexColorMask", entry.UseVertexColorMask ? 1 : 0);
+            block.SetInt("_InvertMask", entry.InvertMask ? 1 : 0);
 
-            // Draw mesh with preview material (Single Pass)
-            if (_previewMaterial.SetPass(0))
+            if (proxy.SkinnedRenderer != null)
             {
-                Graphics.DrawMeshNow(mesh, localToWorld);
+                proxy.SkinnedRenderer.SetPropertyBlock(block);
+            }
+            else if (proxy.MeshRenderer != null)
+            {
+                proxy.MeshRenderer.SetPropertyBlock(block);
             }
         }
 
-        /// <summary>
-        /// Updates preview for all mesh entries (with optional mirror)
-        /// </summary>
+        private ProxyEntry CreateProxy(Renderer target)
+        {
+            GameObject go = new GameObject("GradationPreviewProxy_" + target.name);
+            go.hideFlags = HideFlags.HideAndDontSave;
+            // Raycast等の邪魔にならないよう Ignore Raycast(2) にする
+            go.layer = 2; 
+
+            var proxy = new ProxyEntry { ProxyObject = go };
+
+            if (target is SkinnedMeshRenderer smr)
+            {
+                // SkinnedMeshの場合はターゲットの子にしてTransformを一致させ、Bonesをコピーする
+                go.transform.SetParent(target.transform.parent, false);
+                go.transform.localPosition = target.transform.localPosition;
+                go.transform.localRotation = target.transform.localRotation;
+                go.transform.localScale = target.transform.localScale;
+
+                var newSmr = go.AddComponent<SkinnedMeshRenderer>();
+                newSmr.sharedMesh = smr.sharedMesh;
+                newSmr.bones = smr.bones;
+                newSmr.rootBone = smr.rootBone;
+                newSmr.sharedMaterial = _previewMaterial;
+                newSmr.updateWhenOffscreen = true;
+                proxy.SkinnedRenderer = newSmr;
+            }
+            else if (target is MeshRenderer mr)
+            {
+                // 通常Meshの場合はワールド座標で同期するため親は設定不要か、もしくは同じようにする
+                go.transform.position = target.transform.position;
+                go.transform.rotation = target.transform.rotation;
+                go.transform.localScale = target.transform.lossyScale;
+
+                proxy.MeshFilter = go.AddComponent<MeshFilter>();
+                var sourceMf = target.GetComponent<MeshFilter>();
+                if (sourceMf != null) proxy.MeshFilter.sharedMesh = sourceMf.sharedMesh;
+                
+                proxy.MeshRenderer = go.AddComponent<MeshRenderer>();
+                proxy.MeshRenderer.sharedMaterial = _previewMaterial;
+            }
+            else
+            {
+                Object.DestroyImmediate(go);
+                return null;
+            }
+
+            return proxy;
+        }
+
         public void UpdatePreviewAll(GradationSettings settings)
         {
+            // Remove unused proxies
+            var validRenderers = new HashSet<Renderer>();
+            foreach (var entry in settings.MeshEntries)
+            {
+                if (entry.ActiveRenderer != null) validRenderers.Add(entry.ActiveRenderer);
+            }
+
+            var toRemove = new List<Renderer>();
+            foreach (var renderer in _proxies.Keys)
+            {
+                if (!validRenderers.Contains(renderer)) toRemove.Add(renderer);
+            }
+            foreach (var renderer in toRemove)
+            {
+                if (_proxies[renderer].ProxyObject != null)
+                {
+                    Object.DestroyImmediate(_proxies[renderer].ProxyObject);
+                }
+                _proxies.Remove(renderer);
+            }
+
+            // Update all valid entries
             foreach (var entry in settings.MeshEntries)
             {
                 UpdatePreview(settings, entry);
             }
         }
         
+        public void ClearProxies()
+        {
+            foreach (var proxy in _proxies.Values)
+            {
+                if (proxy.ProxyObject != null) Object.DestroyImmediate(proxy.ProxyObject);
+            }
+            _proxies.Clear();
+        }
+
         private void UpdateLUT(Gradient gradient)
         {
             if (_lutTexture == null)
@@ -116,19 +215,10 @@ namespace GradationBaker.UI
             _lutTexture.Apply();
         }
 
-        private Mesh GetMesh(Renderer renderer)
-        {
-            if (renderer is SkinnedMeshRenderer smr) return smr.sharedMesh;
-            if (renderer is MeshRenderer mr)
-            {
-                MeshFilter mf = mr.GetComponent<MeshFilter>();
-                return mf ? mf.sharedMesh : null;
-            }
-            return null;
-        }
-
         public void Cleanup()
         {
+            ClearProxies();
+
             if (_previewMaterial != null) Object.DestroyImmediate(_previewMaterial);
             if (_lutTexture != null) Object.DestroyImmediate(_lutTexture);
         }

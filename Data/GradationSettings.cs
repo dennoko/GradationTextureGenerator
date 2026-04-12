@@ -24,6 +24,14 @@ namespace GradationBaker.Data
         Spherical = 1
     }
 
+    public enum PreviewBlendMode
+    {
+        Replace  = 0,
+        Additive = 1,
+        Screen   = 2,
+        Multiply = 3
+    }
+
     [System.Serializable]
     public class MeshEntry
     {
@@ -94,7 +102,7 @@ namespace GradationBaker.Data
 
         // Preview Settings
         public bool IsToolActive = true;
-        public float PreviewOpacity = 0.5f;
+        public PreviewBlendMode BlendMode = PreviewBlendMode.Replace;
 
         // Output Settings
         public string SavePath = "Assets/GeneratedGradation/output/";

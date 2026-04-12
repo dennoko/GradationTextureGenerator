@@ -39,7 +39,7 @@
     "bg_black": "黒",
     "edge_padding": "エッジ拡張",
     "edge_padding_help": "UVアイランドの境界を拡張し、テクスチャサンプリング時のシームを軽減します",
-    "opacity": "不透明度",
+    "blend_mode": "合成モード",
     "bake_and_save": "ベイク＆保存",
     "masking": "マスキング (デフォルト設定)",
     "mask_texture": "マスクテクスチャ",

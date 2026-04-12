@@ -446,9 +446,9 @@ namespace GradationBaker.UI
             DrawSection("PREVIEW", () =>
             {
                 EditorGUILayout.BeginHorizontal();
-                GUILayout.Label(L("opacity"), GradationBakerTheme.SecondaryTextStyle, GUILayout.Width(60));
+                GUILayout.Label(L("blend_mode"), GradationBakerTheme.SecondaryTextStyle, GUILayout.Width(60));
                 EditorGUI.BeginChangeCheck();
-                _settings.PreviewOpacity = EditorGUILayout.Slider(_settings.PreviewOpacity, 0f, 1f);
+                _settings.BlendMode = (PreviewBlendMode)EditorGUILayout.EnumPopup(_settings.BlendMode);
                 if (EditorGUI.EndChangeCheck()) SceneView.RepaintAll();
                 EditorGUILayout.EndHorizontal();
             });
@@ -583,8 +583,11 @@ namespace GradationBaker.UI
 
         private void OnSceneGUI(SceneView sceneView)
         {
-            if (!_settings.IsToolActive) return;
-            if (_settings.MeshEntries.Count == 0) return;
+            if (!_settings.IsToolActive || _settings.MeshEntries.Count == 0)
+            {
+                _preview.ClearProxies();
+                return;
+            }
 
             _preview.UpdatePreviewAll(_settings);
 
