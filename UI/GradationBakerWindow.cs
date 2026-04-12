@@ -246,7 +246,7 @@ namespace GradationBaker.UI
 
         private void DrawMeshSection()
         {
-            DrawSection("TARGET MESHES", () =>
+            DrawSection(L("section_target_meshes"), () =>
             {
                 // Drag & Drop エリア
                 Rect dropArea = GUILayoutUtility.GetRect(0, 44, GUILayout.ExpandWidth(true), GUILayout.MinWidth(100));
@@ -290,7 +290,7 @@ namespace GradationBaker.UI
 
         private void DrawGradientSection()
         {
-            DrawSection("GRADIENT", () =>
+            DrawSection(L("section_gradient"), () =>
             {
                 EditorGUI.BeginChangeCheck();
                 _settings.Gradient = EditorGUILayout.GradientField(L("colors"), _settings.Gradient);
@@ -308,25 +308,27 @@ namespace GradationBaker.UI
 
         private void DrawBoxControlSection()
         {
-            DrawSection("BOX CONTROL", () =>
+            DrawSection(L("section_box_control"), () =>
             {
                 GUILayout.Label(L("box_help"), GradationBakerTheme.CaptionStyle);
                 EditorGUILayout.Space(4);
 
-                if (GUILayout.Button(L("fit_to_bounds"), GradationBakerTheme.SecondaryButtonStyle))
-                {
-                    _settings.FitToAllMeshBounds();
-                    SceneView.RepaintAll();
-                }
-
-                EditorGUILayout.Space(4);
                 EditorGUI.BeginChangeCheck();
 
                 string[] shapeOptions = { L("shape_linear"), L("shape_spherical") };
                 _settings.Shape = (GradationShape)EditorGUILayout.Popup(L("shape"), (int)_settings.Shape, shapeOptions);
                 EditorGUILayout.Space(2);
 
+                EditorGUILayout.BeginHorizontal();
                 Vector3 center = EditorGUILayout.Vector3Field(L("center"), _settings.BoxCenter);
+                bool centerResetClicked = GUILayout.Button(L("reset"), GradationBakerTheme.MiniButtonStyle, GUILayout.Width(50));
+                if (centerResetClicked)
+                {
+                    _settings.FitToAllMeshBounds();
+                    SceneView.RepaintAll();
+                    GUI.FocusControl(null);
+                }
+                EditorGUILayout.EndHorizontal();
 
                 EditorGUILayout.BeginHorizontal();
                 Vector3 euler = _settings.BoxRotation.eulerAngles;
@@ -350,7 +352,7 @@ namespace GradationBaker.UI
 
                 if (EditorGUI.EndChangeCheck())
                 {
-                    if (!resetClicked)
+                    if (!resetClicked && !centerResetClicked)
                     {
                         _settings.BoxCenter = RoundVector3(center, 2);
                         _settings.BoxRotation = Quaternion.Euler(RoundVector3(euler, 2));
@@ -373,7 +375,7 @@ namespace GradationBaker.UI
 
         private void DrawMirrorSection()
         {
-            DrawSection("MIRROR", () =>
+            DrawSection(L("section_mirror"), () =>
             {
                 EditorGUI.BeginChangeCheck();
                 _settings.UseMirror = EditorGUILayout.Toggle(L("mirror"), _settings.UseMirror);
@@ -383,6 +385,11 @@ namespace GradationBaker.UI
                     string[] axisOptions = { L("mirror_none"), "X", "Y", "Z" };
                     _settings.MirrorAxis = (MirrorAxis)EditorGUILayout.Popup(
                         L("mirror_axis"), (int)_settings.MirrorAxis, axisOptions);
+
+                    string[] blendOptions = { L("mirror_blend_max"), L("mirror_blend_min") };
+                    _settings.MirrorBlend = (MirrorBlendMode)EditorGUILayout.Popup(
+                        L("mirror_blend"), (int)_settings.MirrorBlend, blendOptions);
+
                     EditorGUILayout.Space(2);
                     GUILayout.Label(L("mirror_help"), GradationBakerTheme.CaptionStyle);
                 }
@@ -393,7 +400,7 @@ namespace GradationBaker.UI
 
         private void DrawOutputSection()
         {
-            DrawSection("OUTPUT", () =>
+            DrawSection(L("section_output"), () =>
             {
                 float originalLabelWidth = EditorGUIUtility.labelWidth;
                 EditorGUIUtility.labelWidth = EditorGUIUtility.currentViewWidth * 0.55f;
@@ -443,7 +450,7 @@ namespace GradationBaker.UI
 
         private void DrawPreviewSection()
         {
-            DrawSection("PREVIEW", () =>
+            DrawSection(L("section_preview"), () =>
             {
                 EditorGUILayout.BeginHorizontal();
                 GUILayout.Label(L("blend_mode"), GradationBakerTheme.SecondaryTextStyle, GUILayout.Width(60));

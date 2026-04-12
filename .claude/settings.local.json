@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/dennoko/AppData/Local/VRChatCreatorCompanion/VRChatProjects/Unity_extension_development/Assets/**)"
+    ]
+  }
+}

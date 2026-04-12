@@ -22,8 +22,8 @@ namespace GradationBaker.UI
 
         // theme.typography
         public static readonly Color TextPrimary   = Hex(0xffffff);
-        public static readonly Color TextSecondary = Hex(0xcccccc);
-        public static readonly Color TextTertiary  = Hex(0xaaaaaa);
+        public static readonly Color TextSecondary = Hex(0xdddddd);
+        public static readonly Color TextTertiary  = Hex(0xbbbbbb);
         public static readonly Color TextDisabled  = Hex(0x555555);
 
         // theme.semantic

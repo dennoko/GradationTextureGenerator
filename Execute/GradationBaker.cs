@@ -42,11 +42,11 @@ namespace GradationBaker.Execute
                                     var mirrorTex = mirrorResult.SubMeshResults[i].Texture;
                                     if (mainTex != null && mirrorTex != null)
                                     {
-                                        BlendTextures(mainTex, mirrorTex);
+                                        BlendTextures(mainTex, mirrorTex, settings.MirrorBlend);
                                     }
                                 }
                             }
-                            
+
                             // Cleanup mirror textures immediately as they are blended in
                             foreach (var res in mirrorResult.SubMeshResults)
                             {
@@ -60,7 +60,7 @@ namespace GradationBaker.Execute
                         var mirrorResult = Bake(settings, entry, true);
                         if (mirrorResult != null && mirrorResult.Texture != null)
                         {
-                            BlendTextures(bakeResult.Texture, mirrorResult.Texture);
+                            BlendTextures(bakeResult.Texture, mirrorResult.Texture, settings.MirrorBlend);
                             Object.DestroyImmediate(mirrorResult.Texture);
                         }
                     }
@@ -247,28 +247,39 @@ namespace GradationBaker.Execute
         }
 
         /// <summary>
-        /// Blends two textures using max blend (for gradation overlay)
+        /// Blends two textures for mirror gradation overlay.
+        /// Max: brighter value wins per channel. Min: darker value wins per channel.
         /// </summary>
-        private void BlendTextures(Texture2D baseT, Texture2D overlayTex)
+        private void BlendTextures(Texture2D baseT, Texture2D overlayTex, MirrorBlendMode blendMode)
         {
             Color[] basePixels = baseT.GetPixels();
             Color[] overlayPixels = overlayTex.GetPixels();
-            
+
             for (int i = 0; i < basePixels.Length; i++)
             {
-                // Max blend - take the brighter value (or higher alpha)
                 Color baseC = basePixels[i];
                 Color overC = overlayPixels[i];
-                
-                // For gradation, we want to combine both - use additive or max
-                basePixels[i] = new Color(
-                    Mathf.Max(baseC.r, overC.r),
-                    Mathf.Max(baseC.g, overC.g),
-                    Mathf.Max(baseC.b, overC.b),
-                    Mathf.Max(baseC.a, overC.a)
-                );
+
+                if (blendMode == MirrorBlendMode.Min)
+                {
+                    basePixels[i] = new Color(
+                        Mathf.Min(baseC.r, overC.r),
+                        Mathf.Min(baseC.g, overC.g),
+                        Mathf.Min(baseC.b, overC.b),
+                        Mathf.Min(baseC.a, overC.a)
+                    );
+                }
+                else // Max (default)
+                {
+                    basePixels[i] = new Color(
+                        Mathf.Max(baseC.r, overC.r),
+                        Mathf.Max(baseC.g, overC.g),
+                        Mathf.Max(baseC.b, overC.b),
+                        Mathf.Max(baseC.a, overC.a)
+                    );
+                }
             }
-            
+
             baseT.SetPixels(basePixels);
             baseT.Apply();
         }

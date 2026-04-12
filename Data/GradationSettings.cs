@@ -11,6 +11,12 @@ namespace GradationBaker.Data
         Z = 3
     }
 
+    public enum MirrorBlendMode
+    {
+        Max = 0,
+        Min = 1
+    }
+
     public enum BackgroundColor
     {
         Transparent = 0,
@@ -75,6 +81,7 @@ namespace GradationBaker.Data
         // Mirror settings
         public bool UseMirror = false;
         public MirrorAxis MirrorAxis = MirrorAxis.X;
+        public MirrorBlendMode MirrorBlend = MirrorBlendMode.Max;
         
         // Gradation shape (Linear or Spherical)
         public GradationShape Shape = GradationShape.Linear;

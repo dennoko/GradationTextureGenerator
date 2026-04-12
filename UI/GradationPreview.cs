@@ -70,6 +70,7 @@ namespace GradationBaker.UI
             
             _previewMaterial.SetInt("_UseMirror", isMirrorEnabled ? 1 : 0);
             _previewMaterial.SetMatrix("_WorldToBoxMirror", worldToBoxMirror);
+            _previewMaterial.SetInt("_MirrorBlendMode", (int)settings.MirrorBlend);
 
             // Fetch or create Proxy
             if (!_proxies.TryGetValue(renderer, out var proxy) || proxy.ProxyObject == null)

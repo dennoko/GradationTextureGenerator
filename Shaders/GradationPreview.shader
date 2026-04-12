@@ -50,6 +50,7 @@ Shader "Hidden/GradationBaker/Preview"
 
         int _UseMirror;
         float4x4 _WorldToBoxMirror;
+        int _MirrorBlendMode;
 
         int _Shape;
 
@@ -114,7 +115,6 @@ Shader "Hidden/GradationBaker/Preview"
             fixed4 colMain = tex2D(_MainTex, float2(t, 0.5));
             colMain.a *= mask;
 
-            fixed4 colMirror = fixed4(0,0,0,0);
             if (_UseMirror == 1)
             {
                 float3 boxLocalPosMirror = mul(_WorldToBoxMirror, float4(i.worldPos, 1.0)).xyz;
@@ -127,11 +127,15 @@ Shader "Hidden/GradationBaker/Preview"
                 {
                     tMirror = saturate(boxLocalPosMirror.y + 0.5);
                 }
-                colMirror = tex2D(_MainTex, float2(tMirror, 0.5));
+                fixed4 colMirror = tex2D(_MainTex, float2(tMirror, 0.5));
                 colMirror.a *= mask;
+
+                if (_MirrorBlendMode == 1)
+                    return min(colMain, colMirror);
+                return max(colMain, colMirror);
             }
 
-            return max(colMain, colMirror);
+            return colMain;
         }
         ENDCG
 
@@ -142,6 +146,7 @@ Shader "Hidden/GradationBaker/Preview"
             Blend Off
             ZWrite Off
             ZTest LEqual
+            Offset -1, -1
 
             CGPROGRAM
             #pragma vertex vert
