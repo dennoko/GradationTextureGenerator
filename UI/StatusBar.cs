@@ -18,36 +18,16 @@ namespace GradationBaker.UI
         private double _clearTime = 0;
         private const float DefaultDuration = 5f;
 
-        // Colors
-        private static readonly Color SuccessColor = new Color(0.3f, 0.75f, 0.3f, 1f);
-        private static readonly Color ErrorColor = new Color(0.9f, 0.3f, 0.3f, 1f);
-        private static readonly Color InfoColor = new Color(0.3f, 0.6f, 0.9f, 1f);
-        private static readonly Color IdleColor = new Color(0.5f, 0.5f, 0.5f, 0.5f);
-
-        private static readonly Color SuccessBg = new Color(0.2f, 0.35f, 0.2f, 1f);
-        private static readonly Color ErrorBg = new Color(0.35f, 0.15f, 0.15f, 1f);
-        private static readonly Color InfoBg = new Color(0.15f, 0.25f, 0.35f, 1f);
-        private static readonly Color IdleBg = new Color(0.2f, 0.2f, 0.2f, 0.3f);
-
         /// <summary>
         /// Shows a status message
         /// </summary>
-        /// <param name="message">Message to display</param>
-        /// <param name="type">Status type</param>
-        /// <param name="duration">Duration in seconds (0 = permanent until next message)</param>
         public void Show(string message, StatusType type, float duration = DefaultDuration)
         {
             _message = message;
             _type = type;
-            
-            if (duration > 0)
-            {
-                _clearTime = EditorApplication.timeSinceStartup + duration;
-            }
-            else
-            {
-                _clearTime = 0; // Permanent
-            }
+            _clearTime = duration > 0
+                ? EditorApplication.timeSinceStartup + duration
+                : 0;
         }
 
         /// <summary>
@@ -61,60 +41,41 @@ namespace GradationBaker.UI
         }
 
         /// <summary>
-        /// Draws the status bar at the current position
-        /// Call this at the end of OnGUI
+        /// Draws the status bar using the GradationBakerTheme styles.
+        /// Call this at the end of OnGUI.
         /// </summary>
         public void Draw()
         {
-            // Check if should auto-clear
+            // Auto-clear
             if (_clearTime > 0 && EditorApplication.timeSinceStartup > _clearTime)
-            {
                 Clear();
-            }
 
-            // Get colors based on type
-            Color textColor, bgColor;
-            string icon;
-            
+            GradationBakerTheme.Initialize();
+
+            string displayText;
+            GUIStyle style;
+
             switch (_type)
             {
                 case StatusType.Success:
-                    textColor = SuccessColor;
-                    bgColor = SuccessBg;
-                    icon = "✁E";
+                    displayText = string.IsNullOrEmpty(_message) ? "" : _message;
+                    style = GradationBakerTheme.StatusSuccessStyle;
                     break;
                 case StatusType.Error:
-                    textColor = ErrorColor;
-                    bgColor = ErrorBg;
-                    icon = "✁E";
+                    displayText = string.IsNullOrEmpty(_message) ? "" : _message;
+                    style = GradationBakerTheme.StatusErrorStyle;
                     break;
                 case StatusType.Info:
-                    textColor = InfoColor;
-                    bgColor = InfoBg;
-                    icon = "ⓁE";
+                    displayText = string.IsNullOrEmpty(_message) ? "" : _message;
+                    style = GradationBakerTheme.StatusInfoStyle;
                     break;
-                default:
-                    textColor = IdleColor;
-                    bgColor = IdleBg;
-                    icon = "";
+                default: // Idle
+                    displayText = "Ready";
+                    style = GradationBakerTheme.StatusInfoStyle;
                     break;
             }
 
-            // Draw background
-            Rect rect = GUILayoutUtility.GetRect(GUIContent.none, GUIStyle.none, GUILayout.Height(22), GUILayout.ExpandWidth(true));
-            EditorGUI.DrawRect(rect, bgColor);
-
-            // Draw text
-            GUIStyle style = new GUIStyle(EditorStyles.label)
-            {
-                alignment = TextAnchor.MiddleLeft,
-                normal = { textColor = textColor },
-                padding = new RectOffset(8, 8, 0, 0),
-                fontStyle = _type != StatusType.Idle ? FontStyle.Bold : FontStyle.Normal
-            };
-
-            string displayText = string.IsNullOrEmpty(_message) ? "" : icon + _message;
-            GUI.Label(rect, displayText, style);
+            GUILayout.Box(displayText, style, GUILayout.ExpandWidth(true));
         }
 
         /// <summary>

@@ -17,26 +17,13 @@ namespace GradationBaker.UI
         private GradationSceneHandle _sceneHandle = new GradationSceneHandle();
         private GradationPreview _preview = new GradationPreview();
         private StatusBar _statusBar = new StatusBar();
-        
+
         // ReorderableList for meshes
         private ReorderableList _meshList;
-        
-        // Foldout states
-        private bool _meshFoldout = true;
-        private bool _gradientFoldout = true;
-        private bool _boxSettingsFoldout = true;
-        private bool _mirrorFoldout = false;
-        private bool _helpFoldout = false;
-        private bool _outputFoldout = true;
-        
+
         // Scroll position
         private Vector2 _scrollPosition;
-        
-        // Styles
-        private GUIStyle _dropAreaStyle;
-        private GUIStyle _sectionStyle;
-        private bool _stylesInitialized = false;
-        
+
         [MenuItem("dennokoworks/Gradation Baker")]
         public static void ShowWindow()
         {
@@ -60,368 +47,366 @@ namespace GradationBaker.UI
             CleanupAllWorkMeshes();
         }
 
-        private void InitStyles()
-        {
-            if (_stylesInitialized) return;
-            
-            _dropAreaStyle = new GUIStyle(EditorStyles.helpBox)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 12,
-                fontStyle = FontStyle.Italic
-            };
-            
-            _sectionStyle = new GUIStyle(EditorStyles.helpBox)
-            {
-                padding = new RectOffset(8, 8, 8, 8)
-            };
-            
-            _stylesInitialized = true;
-        }
-
         private void SetupMeshList()
         {
             _meshList = new ReorderableList(_settings.MeshEntries, typeof(MeshEntry), true, false, false, false);
-            
+
             _meshList.drawElementCallback = (Rect rect, int index, bool isActive, bool isFocused) =>
             {
                 if (index >= _settings.MeshEntries.Count) return;
                 var entry = _settings.MeshEntries[index];
-                
+
                 float removeWidth = 24f;
                 float spacing = 4f;
                 float statusWidth = 50f;
                 float lineHeight = EditorGUIUtility.singleLineHeight;
-                
+
                 // --- First Line: Renderer Field ---
                 Rect headerRect = new Rect(rect.x, rect.y + 2, rect.width, lineHeight);
-                
-                // Renderer field
-                float fieldWidth = rect.width - removeWidth - statusWidth - spacing * 3 - 20; // 20 for foldout
+
+                float fieldWidth = rect.width - removeWidth - statusWidth - spacing * 3 - 20;
                 Rect foldoutRect = new Rect(rect.x, headerRect.y, 20, lineHeight);
                 Rect fieldRect = new Rect(rect.x + 20, headerRect.y, fieldWidth, lineHeight);
-                
+
                 entry.ShowDetails = EditorGUI.Foldout(foldoutRect, entry.ShowDetails, "");
-                
+
                 EditorGUI.BeginChangeCheck();
                 entry.SourceRenderer = (Renderer)EditorGUI.ObjectField(fieldRect, entry.SourceRenderer, typeof(Renderer), true);
                 if (EditorGUI.EndChangeCheck() && entry.SourceRenderer != null)
                 {
-                    // Initialize box on first mesh add
                     if (_settings.MeshEntries.Count == 1 && index == 0)
                     {
                         InitializeBoxFromRenderer(entry.SourceRenderer);
                     }
-                    // Initialize default settings from global settings
                     entry.UVChannel = _settings.UVChannel;
                     entry.MaskTexture = _settings.MaskTexture;
                     entry.UseVertexColorMask = _settings.UseVertexColorMask;
                     entry.InvertMask = _settings.InvertMask;
                 }
-                
+
                 // Work mesh status label
                 Rect statusRect = new Rect(rect.x + 20 + fieldWidth + spacing, headerRect.y, statusWidth, lineHeight);
                 if (entry.HasWorkMesh)
                 {
-                    GUI.Label(statusRect, "[" + L("work") + "]");
+                    var captionStyle = new GUIStyle(EditorStyles.miniLabel);
+                    captionStyle.normal.textColor = GradationBakerTheme.TextTertiary;
+                    GUI.Label(statusRect, "[" + L("work") + "]", captionStyle);
                 }
-                
+
                 // Remove button
                 Rect removeRect = new Rect(rect.x + rect.width - removeWidth, headerRect.y, removeWidth, lineHeight);
-                if (GUI.Button(removeRect, "×"))
+                if (GUI.Button(removeRect, "×", EditorStyles.miniButton))
                 {
                     RemoveMeshEntry(index);
                 }
-                
+
                 // --- Detailed Settings (if expanded) ---
                 if (entry.ShowDetails)
                 {
                     EditorGUI.BeginChangeCheck();
-                    
+
                     float y = rect.y + lineHeight + 6;
                     float indent = 20f;
                     float labelW = 80f;
                     float contentW = rect.width - indent - labelW - 10;
-                    
+
+                    var labelStyle = new GUIStyle(EditorStyles.miniLabel);
+                    labelStyle.normal.textColor = GradationBakerTheme.TextSecondary;
+
                     // UV Channel
                     Rect uvLabelRect = new Rect(rect.x + indent, y, labelW, lineHeight);
                     Rect uvFieldRect = new Rect(rect.x + indent + labelW, y, contentW, lineHeight);
-                    GUI.Label(uvLabelRect, L("uv_channel"));
+                    GUI.Label(uvLabelRect, L("uv_channel"), labelStyle);
                     string[] uvOptions = { "UV0", "UV1", "UV2", "UV3" };
                     entry.UVChannel = EditorGUI.Popup(uvFieldRect, entry.UVChannel, uvOptions);
-                    
+
                     y += lineHeight + 2;
-                    
+
                     // Mask Texture
                     Rect maskLabelRect = new Rect(rect.x + indent, y, labelW, lineHeight);
                     Rect maskFieldRect = new Rect(rect.x + indent + labelW, y, contentW, lineHeight);
-                    GUI.Label(maskLabelRect, L("mask_texture"));
+                    GUI.Label(maskLabelRect, L("mask_texture"), labelStyle);
                     entry.MaskTexture = (Texture2D)EditorGUI.ObjectField(maskFieldRect, entry.MaskTexture, typeof(Texture2D), false);
-                    
+
                     y += lineHeight + 2;
-                    
+
                     // Mask Options
                     Rect optRect1 = new Rect(rect.x + indent + labelW, y, 120, lineHeight);
                     Rect optRect2 = new Rect(rect.x + indent + labelW + 120, y, 100, lineHeight);
                     entry.UseVertexColorMask = EditorGUI.ToggleLeft(optRect1, L("use_vertex_color"), entry.UseVertexColorMask);
                     entry.InvertMask = EditorGUI.ToggleLeft(optRect2, L("invert_mask"), entry.InvertMask);
-                    
+
                     y += lineHeight + 2;
 
                     // Split by Material Option
                     Rect splitRect = new Rect(rect.x + indent + labelW, y, 200, lineHeight);
                     entry.SplitByMaterial = EditorGUI.ToggleLeft(splitRect, L("split_by_material"), entry.SplitByMaterial);
-                    
+
                     if (EditorGUI.EndChangeCheck())
                     {
                         SceneView.RepaintAll();
                     }
                 }
             };
-            
+
             _meshList.elementHeightCallback = (int index) =>
             {
                 if (index >= _settings.MeshEntries.Count) return EditorGUIUtility.singleLineHeight + 6;
                 var entry = _settings.MeshEntries[index];
                 if (entry.ShowDetails)
                 {
-                    return (EditorGUIUtility.singleLineHeight + 2) * 5 + 10; // Header + 4 rows + padding
+                    return (EditorGUIUtility.singleLineHeight + 2) * 5 + 10;
                 }
                 return EditorGUIUtility.singleLineHeight + 6;
             };
         }
 
+        // ─── OnGUI ───────────────────────────────────────────────────────────
+
         private void OnGUI()
         {
-            InitStyles();
-            
-            // Header with language selector
-            EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
-            _settings.IsToolActive = EditorGUILayout.ToggleLeft(L("enable_tool"), _settings.IsToolActive, GUILayout.Width(120));
-            GUILayout.FlexibleSpace();
-            if (LocalizationManager.DrawLanguageSelector())
-            {
-                Repaint();
-            }
-            EditorGUILayout.EndHorizontal();
+            GradationBakerTheme.Initialize();
+
+            // ウィンドウ全面に surface.level0 を塗る
+            EditorGUI.DrawRect(new Rect(0, 0, position.width, position.height), GradationBakerTheme.Surface0);
+
+            DrawHeader();
 
             if (!_settings.IsToolActive)
             {
-                EditorGUILayout.HelpBox(L("tool_disabled"), MessageType.Info);
+                GUILayout.BeginVertical(GradationBakerTheme.CardStyle);
+                GUILayout.Label(L("tool_disabled"), GradationBakerTheme.SecondaryTextStyle);
+                GUILayout.EndVertical();
+                _statusBar.Draw();
+                if (_statusBar.NeedsRepaint()) Repaint();
                 return;
             }
 
-            _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition, GUILayout.ExpandWidth(true));
+            _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
 
-            EditorGUILayout.Space(5);
-            
-            // Target Meshes Section with Drag & Drop
-            _meshFoldout = EditorGUILayout.Foldout(_meshFoldout, L("target_meshes"), true, EditorStyles.foldoutHeader);
-            if (_meshFoldout)
-            {
-                EditorGUILayout.BeginVertical(_sectionStyle, GUILayout.ExpandWidth(true));
-                
-                // Drag & Drop Area
-                Rect dropArea = GUILayoutUtility.GetRect(0, 50, GUILayout.ExpandWidth(true), GUILayout.MinWidth(100));
-                GUI.Box(dropArea, L("drop_meshes_here"), _dropAreaStyle);
-                HandleDragAndDrop(dropArea);
-                
-                if (_settings.MeshEntries.Count > 0)
-                {
-                    EditorGUILayout.Space(3);
-                    _meshList.DoLayoutList();
-                    
-                    // Work mesh buttons (all at once)
-                    EditorGUILayout.BeginHorizontal();
-                    bool hasAnyWorkMesh = HasAnyWorkMesh();
-                    if (GUILayout.Button(hasAnyWorkMesh ? L("delete_work_mesh") : L("create_work_mesh")))
-                    {
-                        ToggleAllWorkMeshes();
-                    }
-                    EditorGUILayout.EndHorizontal();
-                    
-                    if (GUILayout.Button(L("clear_all")))
-                    {
-                        ClearAllMeshes();
-                    }
-                }
-                
-                EditorGUILayout.EndVertical();
-            }
+            DrawMeshSection();
+            DrawGradientSection();
 
-            EditorGUILayout.Space(5);
-            
-            // Gradient Section (always visible, even without mesh)
-            _gradientFoldout = EditorGUILayout.Foldout(_gradientFoldout, L("gradient"), true, EditorStyles.foldoutHeader);
-            if (_gradientFoldout)
-            {
-                EditorGUILayout.BeginVertical(_sectionStyle, GUILayout.ExpandWidth(true));
-                EditorGUI.BeginChangeCheck();
-                _settings.Gradient = EditorGUILayout.GradientField(L("colors"), _settings.Gradient);
-                if (EditorGUI.EndChangeCheck())
-                {
-                    SceneView.RepaintAll();
-                }
-                
-                // Gradient save/load buttons
-                EditorGUILayout.BeginHorizontal();
-                if (GUILayout.Button(L("save_gradient")))
-                {
-                    SaveGradientAsTexture();
-                }
-                if (GUILayout.Button(L("load_gradient")))
-                {
-                    LoadGradientFromTexture();
-                }
-                EditorGUILayout.EndHorizontal();
-                
-                EditorGUILayout.EndVertical();
-            }
-
+            // メッシュがない場合はヘルプを表示して早期リターン
             if (_settings.MeshEntries.Count == 0 || _settings.GetPrimaryRenderer() == null)
             {
-                EditorGUILayout.BeginVertical(GUILayout.ExpandWidth(true));
-                EditorGUILayout.Space(10);
-                EditorGUILayout.LabelField(L("help_title"), EditorStyles.boldLabel);
-                EditorGUILayout.HelpBox(L("help_usage"), MessageType.Info);
-                EditorGUILayout.HelpBox(L("help_warning"), MessageType.Warning);
-                EditorGUILayout.EndVertical();
+                DrawSection(L("help_title"), () =>
+                {
+                    GUILayout.Label(L("help_usage"), GradationBakerTheme.SecondaryTextStyle);
+                    EditorGUILayout.Space(4);
+                    GUILayout.Label(L("help_warning"), GradationBakerTheme.CaptionStyle);
+                });
+
                 EditorGUILayout.EndScrollView();
                 _statusBar.Draw();
                 if (_statusBar.NeedsRepaint()) Repaint();
                 return;
             }
 
-            EditorGUILayout.Space(5);
-            
-            // Box Control Section
-            _boxSettingsFoldout = EditorGUILayout.Foldout(_boxSettingsFoldout, L("box_control"), true, EditorStyles.foldoutHeader);
-            if (_boxSettingsFoldout)
+            DrawBoxControlSection();
+            DrawMirrorSection();
+            DrawOutputSection();
+            DrawPreviewSection();
+
+            EditorGUILayout.Space(4);
+            EditorGUILayout.EndScrollView();
+
+            // フッター: Bake ボタン
+            GUILayout.BeginVertical(GradationBakerTheme.CardStyle);
+            if (GUILayout.Button("🎨 " + L("bake_and_save"), GradationBakerTheme.ActionButtonStyle))
             {
-                EditorGUILayout.BeginVertical(_sectionStyle, GUILayout.ExpandWidth(true));
-                
-                if (GUILayout.Button(L("fit_to_bounds")))
+                BakeAndSave();
+            }
+            GUILayout.EndVertical();
+
+            _statusBar.Draw();
+            if (_statusBar.NeedsRepaint()) Repaint();
+        }
+
+        // ─── Header ──────────────────────────────────────────────────────────
+
+        private void DrawHeader()
+        {
+            EditorGUILayout.Space(6);
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(8);
+            GUILayout.Label("Gradation Baker", GradationBakerTheme.TitleStyle);
+            GUILayout.FlexibleSpace();
+            _settings.IsToolActive = EditorGUILayout.ToggleLeft(
+                L("enable_tool"), _settings.IsToolActive,
+                GradationBakerTheme.SecondaryTextStyle, GUILayout.Width(120));
+            if (LocalizationManager.DrawLanguageSelector()) Repaint();
+            GUILayout.Space(6);
+            GUILayout.EndHorizontal();
+            EditorGUILayout.Space(6);
+            DrawSeparator();
+        }
+
+        // ─── Sections ────────────────────────────────────────────────────────
+
+        private void DrawMeshSection()
+        {
+            DrawSection("TARGET MESHES", () =>
+            {
+                // Drag & Drop エリア
+                Rect dropArea = GUILayoutUtility.GetRect(0, 44, GUILayout.ExpandWidth(true), GUILayout.MinWidth(100));
+                EditorGUI.DrawRect(dropArea, GradationBakerTheme.Surface2);
+
+                // ドロップエリア枠線
+                var borderColor = GradationBakerTheme.Outline;
+                EditorGUI.DrawRect(new Rect(dropArea.x, dropArea.y, dropArea.width, 1), borderColor);
+                EditorGUI.DrawRect(new Rect(dropArea.x, dropArea.yMax - 1, dropArea.width, 1), borderColor);
+                EditorGUI.DrawRect(new Rect(dropArea.x, dropArea.y, 1, dropArea.height), borderColor);
+                EditorGUI.DrawRect(new Rect(dropArea.xMax - 1, dropArea.y, 1, dropArea.height), borderColor);
+
+                var dropLabelStyle = new GUIStyle(EditorStyles.centeredGreyMiniLabel);
+                dropLabelStyle.normal.textColor = GradationBakerTheme.TextTertiary;
+                dropLabelStyle.fontStyle = FontStyle.Italic;
+                GUI.Label(dropArea, L("drop_meshes_here"), dropLabelStyle);
+                HandleDragAndDrop(dropArea);
+
+                if (_settings.MeshEntries.Count > 0)
+                {
+                    EditorGUILayout.Space(4);
+                    _meshList.DoLayoutList();
+
+                    EditorGUILayout.Space(2);
+                    EditorGUILayout.BeginHorizontal();
+                    bool hasAnyWorkMesh = HasAnyWorkMesh();
+                    if (GUILayout.Button(
+                        hasAnyWorkMesh ? L("delete_work_mesh") : L("create_work_mesh"),
+                        GradationBakerTheme.SecondaryButtonStyle))
+                    {
+                        ToggleAllWorkMeshes();
+                    }
+                    if (GUILayout.Button(L("clear_all"), GradationBakerTheme.SecondaryButtonStyle))
+                    {
+                        ClearAllMeshes();
+                    }
+                    EditorGUILayout.EndHorizontal();
+                }
+            });
+        }
+
+        private void DrawGradientSection()
+        {
+            DrawSection("GRADIENT", () =>
+            {
+                EditorGUI.BeginChangeCheck();
+                _settings.Gradient = EditorGUILayout.GradientField(L("colors"), _settings.Gradient);
+                if (EditorGUI.EndChangeCheck()) SceneView.RepaintAll();
+
+                EditorGUILayout.Space(4);
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button(L("save_gradient"), GradationBakerTheme.SecondaryButtonStyle))
+                    SaveGradientAsTexture();
+                if (GUILayout.Button(L("load_gradient"), GradationBakerTheme.SecondaryButtonStyle))
+                    LoadGradientFromTexture();
+                EditorGUILayout.EndHorizontal();
+            });
+        }
+
+        private void DrawBoxControlSection()
+        {
+            DrawSection("BOX CONTROL", () =>
+            {
+                GUILayout.Label(L("box_help"), GradationBakerTheme.CaptionStyle);
+                EditorGUILayout.Space(4);
+
+                if (GUILayout.Button(L("fit_to_bounds"), GradationBakerTheme.SecondaryButtonStyle))
                 {
                     _settings.FitToAllMeshBounds();
                     SceneView.RepaintAll();
                 }
-                
-                EditorGUILayout.Space(3);
-                EditorGUILayout.HelpBox(L("box_help"), MessageType.Info);
-                EditorGUILayout.Space(3);
-                
+
+                EditorGUILayout.Space(4);
                 EditorGUI.BeginChangeCheck();
-                
-                // Shape Selection
+
                 string[] shapeOptions = { L("shape_linear"), L("shape_spherical") };
                 _settings.Shape = (GradationShape)EditorGUILayout.Popup(L("shape"), (int)_settings.Shape, shapeOptions);
                 EditorGUILayout.Space(2);
-                
+
                 Vector3 center = EditorGUILayout.Vector3Field(L("center"), _settings.BoxCenter);
-                
+
                 EditorGUILayout.BeginHorizontal();
                 Vector3 euler = _settings.BoxRotation.eulerAngles;
                 euler = EditorGUILayout.Vector3Field(L("rotation"), euler);
-                
-                bool resetClicked = GUILayout.Button(L("reset"), GUILayout.Width(50));
+                bool resetClicked = GUILayout.Button(L("reset"), GradationBakerTheme.MiniButtonStyle, GUILayout.Width(50));
                 if (resetClicked)
                 {
                     _settings.BoxRotation = Quaternion.identity;
                     SceneView.RepaintAll();
-                    GUI.FocusControl(null); // Clear focus to update fields
+                    GUI.FocusControl(null);
                 }
                 EditorGUILayout.EndHorizontal();
 
                 float height = _settings.BoxHeight;
                 Vector3 size = _settings.BoxScale;
-                
+
                 if (_settings.Shape == GradationShape.Linear)
-                {
                     height = EditorGUILayout.FloatField(L("height"), _settings.BoxHeight);
-                }
                 else
-                {
                     size = EditorGUILayout.Vector3Field(L("size"), _settings.BoxScale);
-                }
-                
+
                 if (EditorGUI.EndChangeCheck())
                 {
                     if (!resetClicked)
                     {
                         _settings.BoxCenter = RoundVector3(center, 2);
                         _settings.BoxRotation = Quaternion.Euler(RoundVector3(euler, 2));
-                        
+
                         if (_settings.Shape == GradationShape.Linear)
                         {
                             _settings.BoxHeight = Mathf.Max(0.01f, Mathf.Round(height * 100f) / 100f);
                         }
                         else
                         {
-                            _settings.BoxWidth = Mathf.Max(0.01f, Mathf.Round(size.x * 100f) / 100f);
+                            _settings.BoxWidth  = Mathf.Max(0.01f, Mathf.Round(size.x * 100f) / 100f);
                             _settings.BoxHeight = Mathf.Max(0.01f, Mathf.Round(size.y * 100f) / 100f);
-                            _settings.BoxDepth = Mathf.Max(0.01f, Mathf.Round(size.z * 100f) / 100f);
+                            _settings.BoxDepth  = Mathf.Max(0.01f, Mathf.Round(size.z * 100f) / 100f);
                         }
                     }
                     SceneView.RepaintAll();
                 }
-                
-                EditorGUILayout.EndVertical();
-            }
+            });
+        }
 
-            EditorGUILayout.Space(5);
-            
-            // Mirror Section
-            _mirrorFoldout = EditorGUILayout.Foldout(_mirrorFoldout, L("mirror"), true, EditorStyles.foldoutHeader);
-            if (_mirrorFoldout)
+        private void DrawMirrorSection()
+        {
+            DrawSection("MIRROR", () =>
             {
-                EditorGUILayout.BeginVertical(_sectionStyle, GUILayout.ExpandWidth(true));
-                
                 EditorGUI.BeginChangeCheck();
                 _settings.UseMirror = EditorGUILayout.Toggle(L("mirror"), _settings.UseMirror);
-                
+
                 if (_settings.UseMirror)
                 {
                     string[] axisOptions = { L("mirror_none"), "X", "Y", "Z" };
-                    _settings.MirrorAxis = (MirrorAxis)EditorGUILayout.Popup(L("mirror_axis"), (int)_settings.MirrorAxis, axisOptions);
-                    EditorGUILayout.HelpBox(L("mirror_help"), MessageType.Info);
+                    _settings.MirrorAxis = (MirrorAxis)EditorGUILayout.Popup(
+                        L("mirror_axis"), (int)_settings.MirrorAxis, axisOptions);
+                    EditorGUILayout.Space(2);
+                    GUILayout.Label(L("mirror_help"), GradationBakerTheme.CaptionStyle);
                 }
-                
-                if (EditorGUI.EndChangeCheck())
-                {
-                    SceneView.RepaintAll();
-                }
-                
-                EditorGUILayout.EndVertical();
-            }
 
-            EditorGUILayout.Space(5);
+                if (EditorGUI.EndChangeCheck()) SceneView.RepaintAll();
+            });
+        }
 
-
-
-            EditorGUILayout.Space(5);
-
-            // Output Settings Section
-            _outputFoldout = EditorGUILayout.Foldout(_outputFoldout, L("output_settings"), true, EditorStyles.foldoutHeader);
-            if (_outputFoldout)
+        private void DrawOutputSection()
+        {
+            DrawSection("OUTPUT", () =>
             {
-                EditorGUILayout.BeginVertical(_sectionStyle, GUILayout.ExpandWidth(true));
-                
-                // Set label width for 2:1 ratio
                 float originalLabelWidth = EditorGUIUtility.labelWidth;
                 EditorGUIUtility.labelWidth = EditorGUIUtility.currentViewWidth * 0.55f;
-                
-                // Resolution (dropdown)
+
                 string[] resOptions = { "128", "256", "512", "1024", "2048", "4096" };
                 int[] resValues = { 128, 256, 512, 1024, 2048, 4096 };
                 int currentResIndex = System.Array.IndexOf(resValues, _settings.Resolution);
-                if (currentResIndex < 0) currentResIndex = 4; // Default to 2048
+                if (currentResIndex < 0) currentResIndex = 4;
                 int newResIndex = EditorGUILayout.Popup(L("resolution"), currentResIndex, resOptions);
                 _settings.Resolution = resValues[newResIndex];
-                
-                // Use Texture Folder option
+
                 _settings.UseTextureFolder = EditorGUILayout.Toggle(L("use_texture_folder"), _settings.UseTextureFolder);
-                
-                // Save Path (only show if not using texture folder)
+
                 if (!_settings.UseTextureFolder)
                 {
                     EditorGUILayout.BeginHorizontal();
@@ -432,87 +417,104 @@ namespace GradationBaker.UI
                         if (!string.IsNullOrEmpty(path))
                         {
                             if (path.StartsWith(Application.dataPath))
-                            {
                                 _settings.SavePath = "Assets" + path.Substring(Application.dataPath.Length);
-                            }
                             else
-                            {
                                 _settings.SavePath = path;
-                            }
                         }
                     }
                     EditorGUILayout.EndHorizontal();
                 }
-                
-                // Background Color
+
                 string[] bgOptions = { L("bg_transparent"), L("bg_white"), L("bg_black") };
-                _settings.BgColor = (BackgroundColor)EditorGUILayout.Popup(L("bg_color"), (int)_settings.BgColor, bgOptions);
-                
-                // Edge Padding
-                _settings.EdgePaddingPixels = EditorGUILayout.IntSlider(L("edge_padding"), _settings.EdgePaddingPixels, 0, 16);
+                _settings.BgColor = (BackgroundColor)EditorGUILayout.Popup(
+                    L("bg_color"), (int)_settings.BgColor, bgOptions);
+
+                _settings.EdgePaddingPixels = EditorGUILayout.IntSlider(
+                    L("edge_padding"), _settings.EdgePaddingPixels, 0, 16);
                 if (_settings.EdgePaddingPixels > 0)
                 {
-                    EditorGUILayout.HelpBox(L("edge_padding_help"), MessageType.Info);
+                    EditorGUILayout.Space(2);
+                    GUILayout.Label(L("edge_padding_help"), GradationBakerTheme.CaptionStyle);
                 }
-                
-                // Restore label width
+
                 EditorGUIUtility.labelWidth = originalLabelWidth;
-                
-                EditorGUILayout.EndVertical();
-            }
+            });
+        }
 
-            EditorGUILayout.Space(5);
-            
-            // Opacity slider (preview is always on)
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField(L("opacity"), GUILayout.Width(60));
-            _settings.PreviewOpacity = EditorGUILayout.Slider(_settings.PreviewOpacity, 0f, 1f);
-            EditorGUILayout.EndHorizontal();
-            if (GUI.changed) SceneView.RepaintAll();
+        private void DrawPreviewSection()
+        {
+            DrawSection("PREVIEW", () =>
+            {
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Label(L("opacity"), GradationBakerTheme.SecondaryTextStyle, GUILayout.Width(60));
+                EditorGUI.BeginChangeCheck();
+                _settings.PreviewOpacity = EditorGUILayout.Slider(_settings.PreviewOpacity, 0f, 1f);
+                if (EditorGUI.EndChangeCheck()) SceneView.RepaintAll();
+                EditorGUILayout.EndHorizontal();
+            });
+        }
 
-            EditorGUILayout.Space(10);
-            
-            // Bake button
-            GUI.backgroundColor = new Color(0.4f, 0.8f, 0.4f);
-            if (GUILayout.Button("🎨 " + L("bake_and_save"), GUILayout.Height(45)))
-            {
-                BakeAndSave();
-            }
-            GUI.backgroundColor = Color.white;
-            
-            // Help Section (Collapsed by default)
-            EditorGUILayout.Space(10);
-            _helpFoldout = EditorGUILayout.Foldout(_helpFoldout, L("help_title"), true, EditorStyles.foldoutHeader);
-            if (_helpFoldout)
-            {
-                EditorGUILayout.HelpBox(L("help_usage"), MessageType.Info);
-                EditorGUILayout.HelpBox(L("help_warning"), MessageType.Warning);
-            }
+        // ─── Section Helpers ─────────────────────────────────────────────────
 
-            EditorGUILayout.EndScrollView();
-            
-            // Status bar at bottom
-            _statusBar.Draw();
-            
-            // Request repaint for auto-clear
-            if (_statusBar.NeedsRepaint())
+        private void DrawSection(string title, System.Action content)
+        {
+            GUILayout.BeginVertical(GradationBakerTheme.CardStyle);
+            GUILayout.Label(title, GradationBakerTheme.SectionHeaderStyle);
+            DrawSeparator();
+            content?.Invoke();
+            GUILayout.EndVertical();
+        }
+
+        private void DrawToggleSection(string title, ref bool toggle, System.Action content, System.Action onReset = null)
+        {
+            GUILayout.BeginVertical(GradationBakerTheme.CardStyle);
+
+            GUILayout.BeginHorizontal();
+            var headerStyle = toggle ? GradationBakerTheme.ToggleSectionOnStyle : GradationBakerTheme.ToggleSectionOffStyle;
+            EditorGUI.BeginChangeCheck();
+            bool newToggle = EditorGUILayout.ToggleLeft(title, toggle, headerStyle, GUILayout.ExpandWidth(true));
+            if (EditorGUI.EndChangeCheck())
             {
+                toggle = newToggle;
                 Repaint();
             }
+            if (onReset != null && GUILayout.Button("Reset", GradationBakerTheme.MiniButtonStyle, GUILayout.Width(50)))
+            {
+                onReset.Invoke();
+                GUI.FocusControl(null);
+            }
+            GUILayout.EndHorizontal();
+
+            DrawSeparator();
+
+            using (new EditorGUI.DisabledGroupScope(!toggle))
+            {
+                content?.Invoke();
+            }
+
+            GUILayout.EndVertical();
         }
+
+        private void DrawSeparator()
+        {
+            var rect = GUILayoutUtility.GetRect(0, 1, GUILayout.ExpandWidth(true));
+            EditorGUI.DrawRect(rect, GradationBakerTheme.Outline);
+            EditorGUILayout.Space(4);
+        }
+
+        // ─── Drag & Drop ─────────────────────────────────────────────────────
 
         private void HandleDragAndDrop(Rect dropArea)
         {
             Event evt = Event.current;
-            
+
             switch (evt.type)
             {
                 case EventType.DragUpdated:
                 case EventType.DragPerform:
                     if (!dropArea.Contains(evt.mousePosition))
                         return;
-                    
-                    // Check if any dragged objects are valid
+
                     bool hasValidObject = false;
                     foreach (var obj in DragAndDrop.objectReferences)
                     {
@@ -527,34 +529,29 @@ namespace GradationBaker.UI
                             break;
                         }
                     }
-                    
+
                     if (!hasValidObject)
                         return;
-                    
+
                     DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
-                    
+
                     if (evt.type == EventType.DragPerform)
                     {
                         DragAndDrop.AcceptDrag();
-                        
+
                         bool isFirstMesh = _settings.MeshEntries.Count == 0;
-                        
+
                         foreach (var obj in DragAndDrop.objectReferences)
                         {
                             Renderer renderer = null;
-                            
+
                             if (obj is GameObject go)
-                            {
                                 renderer = go.GetComponent<Renderer>();
-                            }
                             else if (obj is Renderer r)
-                            {
                                 renderer = r;
-                            }
-                            
+
                             if (renderer != null)
                             {
-                                // Check if already added
                                 bool alreadyExists = false;
                                 foreach (var entry in _settings.MeshEntries)
                                 {
@@ -564,117 +561,101 @@ namespace GradationBaker.UI
                                         break;
                                     }
                                 }
-                                
+
                                 if (!alreadyExists)
-                                {
                                     _settings.MeshEntries.Add(new MeshEntry { SourceRenderer = renderer });
-                                }
                             }
                         }
-                        
-                        // Initialize box if first mesh added
+
                         if (isFirstMesh && _settings.MeshEntries.Count > 0)
-                        {
                             InitializeBoxFromRenderer(_settings.MeshEntries[0].SourceRenderer);
-                        }
-                        
+
                         SetupMeshList();
                         SceneView.RepaintAll();
                     }
-                    
+
                     evt.Use();
                     break;
             }
         }
+
+        // ─── Scene GUI ───────────────────────────────────────────────────────
 
         private void OnSceneGUI(SceneView sceneView)
         {
             if (!_settings.IsToolActive) return;
             if (_settings.MeshEntries.Count == 0) return;
 
-            // Preview all meshes (always on)
             _preview.UpdatePreviewAll(_settings);
 
-            // Main Handle
             HandleChangeType changeType = _sceneHandle.DrawHandle(_settings, this);
-            
-            // Mirror handle visualization
+
             if (_settings.UseMirror && _settings.MirrorAxis != MirrorAxis.None)
-            {
                 _sceneHandle.DrawMirrorHandle(_settings);
-            }
-            
+
             if (changeType != HandleChangeType.None)
-            {
                 Repaint();
-            }
         }
+
+        // ─── Bake ────────────────────────────────────────────────────────────
 
         private void BakeAndSave()
         {
             FileLogger.Clear();
             FileLogger.Log("[GradationBakerWindow] Bake & Save clicked.");
-            
+
             var results = _baker.BakeAll(_settings);
             int savedCount = 0;
             List<string> savedPaths = new List<string>();
-            
+
             foreach (var result in results)
             {
                 if (result.Texture == null && (result.SubMeshResults == null || result.SubMeshResults.Count == 0)) continue;
-                
-                // Resolve output folder
+
                 string outputFolder = OutputPathResolver.ResolveOutputFolder(
-                    result.SourceRenderer, 
-                    _settings.SavePath, 
+                    result.SourceRenderer,
+                    _settings.SavePath,
                     _settings.UseTextureFolder
                 );
-                
-                // Ensure directory exists
-                OutputPathResolver.EnsureDirectoryExists(outputFolder);
-                
-                // Generate unique filename base
-        string fullDirPath = OutputPathResolver.ToFullPath(outputFolder);
-        
-        // Handle split results or single texture
-        if (result.SubMeshResults != null && result.SubMeshResults.Count > 0)
-        {
-            foreach (var subRes in result.SubMeshResults)
-            {
-                if (subRes.Texture == null) continue;
 
-                // Safety check for invalid char in mat name
-                string safeMatName = string.Join("_", subRes.MaterialName.Split(Path.GetInvalidFileNameChars()));
-                string baseName = $"{result.RendererName}_{safeMatName}";
-                
-                string fileName = OutputPathResolver.GenerateUniqueFilename(fullDirPath, baseName);
-                string fullPath = Path.Combine(fullDirPath, fileName).Replace('\\', '/');
-                
-                // Save
-                SaveTexture(subRes.Texture, fullPath);
-                
-                FileLogger.Log($"[GradationBakerWindow] Saved: {fullPath}");
-                savedPaths.Add(fullPath);
-                savedCount++;
+                OutputPathResolver.EnsureDirectoryExists(outputFolder);
+
+                string fullDirPath = OutputPathResolver.ToFullPath(outputFolder);
+
+                if (result.SubMeshResults != null && result.SubMeshResults.Count > 0)
+                {
+                    foreach (var subRes in result.SubMeshResults)
+                    {
+                        if (subRes.Texture == null) continue;
+
+                        string safeMatName = string.Join("_", subRes.MaterialName.Split(Path.GetInvalidFileNameChars()));
+                        string baseName = $"{result.RendererName}_{safeMatName}";
+
+                        string fileName = OutputPathResolver.GenerateUniqueFilename(fullDirPath, baseName);
+                        string fullPath = Path.Combine(fullDirPath, fileName).Replace('\\', '/');
+
+                        SaveTexture(subRes.Texture, fullPath);
+
+                        FileLogger.Log($"[GradationBakerWindow] Saved: {fullPath}");
+                        savedPaths.Add(fullPath);
+                        savedCount++;
+                    }
+                }
+                else if (result.Texture != null)
+                {
+                    string fileName = OutputPathResolver.GenerateUniqueFilename(fullDirPath, result.RendererName);
+                    string fullPath = Path.Combine(fullDirPath, fileName).Replace('\\', '/');
+
+                    SaveTexture(result.Texture, fullPath);
+
+                    FileLogger.Log($"[GradationBakerWindow] Saved: {fullPath}");
+                    savedPaths.Add(fullPath);
+                    savedCount++;
+                }
             }
-        }
-            else if (result.Texture != null)
-            {
-                string fileName = OutputPathResolver.GenerateUniqueFilename(fullDirPath, result.RendererName);
-                string fullPath = Path.Combine(fullDirPath, fileName).Replace('\\', '/');
-                
-                // Save
-                SaveTexture(result.Texture, fullPath);
-                
-                FileLogger.Log($"[GradationBakerWindow] Saved: {fullPath}");
-                savedPaths.Add(fullPath);
-                savedCount++;
-            }
-        }
-    
-        AssetDatabase.Refresh();
-            
-            // Set texture importer settings for transparent textures
+
+            AssetDatabase.Refresh();
+
             if (_settings.BgColor == BackgroundColor.Transparent)
             {
                 foreach (string fullPath in savedPaths)
@@ -688,19 +669,17 @@ namespace GradationBaker.UI
                     }
                 }
             }
-            
+
             if (savedCount > 0)
             {
                 string message = L("status_bake_success", savedCount);
                 _statusBar.Show(message, StatusBar.StatusType.Success);
-                
-                // Open the first saved texture in Project tab
+
                 if (savedPaths.Count > 0)
                 {
                     string firstPath = savedPaths[0];
                     string assetPath = "Assets" + firstPath.Substring(Application.dataPath.Length);
-                    
-                    // Ping the texture to reveal it in Project tab
+
                     Object textureAsset = AssetDatabase.LoadAssetAtPath<Object>(assetPath);
                     if (textureAsset != null)
                     {
@@ -714,6 +693,8 @@ namespace GradationBaker.UI
                 _statusBar.Show(L("status_bake_error"), StatusBar.StatusType.Error, 0);
             }
         }
+
+        // ─── Mesh Helpers ────────────────────────────────────────────────────
 
         private void InitializeBoxFromRenderer(Renderer renderer)
         {
@@ -739,12 +720,11 @@ namespace GradationBaker.UI
         private void ToggleAllWorkMeshes()
         {
             bool hasAny = HasAnyWorkMesh();
-            
+
             foreach (var entry in _settings.MeshEntries)
             {
                 if (hasAny)
                 {
-                    // Delete all work meshes
                     if (entry.HasWorkMesh)
                     {
                         WorkMeshManager.DeleteWorkMesh(entry.WorkMeshObject);
@@ -753,17 +733,12 @@ namespace GradationBaker.UI
                 }
                 else
                 {
-                    // Create all work meshes
                     if (!entry.HasWorkMesh && entry.SourceRenderer != null)
-                    {
                         entry.WorkMeshObject = WorkMeshManager.CreateWorkMesh(entry.SourceRenderer);
-                    }
                 }
             }
-            
-            // Fit to mesh bounds after creating or deleting work meshes
+
             _settings.FitToAllMeshBounds();
-            
             SceneView.RepaintAll();
         }
 
@@ -784,13 +759,11 @@ namespace GradationBaker.UI
         private void RemoveMeshEntry(int index)
         {
             if (index < 0 || index >= _settings.MeshEntries.Count) return;
-            
+
             var entry = _settings.MeshEntries[index];
             if (entry.HasWorkMesh)
-            {
                 WorkMeshManager.DeleteWorkMesh(entry.WorkMeshObject);
-            }
-            
+
             _settings.MeshEntries.RemoveAt(index);
             SetupMeshList();
             SceneView.RepaintAll();
@@ -827,25 +800,22 @@ namespace GradationBaker.UI
             return null;
         }
 
+        // ─── Gradient Save / Load ────────────────────────────────────────────
+
         private void SaveGradientAsTexture()
         {
-            // Ensure gradient directory exists
             string gradientDir = "Assets/GeneratedGradation/gradation";
             if (!AssetDatabase.IsValidFolder(gradientDir))
             {
                 if (!AssetDatabase.IsValidFolder("Assets/GeneratedGradation"))
-                {
                     AssetDatabase.CreateFolder("Assets", "GeneratedGradation");
-                }
                 AssetDatabase.CreateFolder("Assets/GeneratedGradation", "gradation");
             }
-            
-            // Generate unique filename
+
             string fullDirPath = OutputPathResolver.ToFullPath(gradientDir);
             string fileName = GenerateUniqueGradientFilename(fullDirPath);
             string fullPath = Path.Combine(fullDirPath, fileName).Replace('\\', '/');
-            
-            // Create gradient texture (256x1)
+
             Texture2D tex = new Texture2D(256, 1, TextureFormat.RGBA32, false);
             for (int i = 0; i < 256; i++)
             {
@@ -853,15 +823,13 @@ namespace GradationBaker.UI
                 tex.SetPixel(i, 0, _settings.Gradient.Evaluate(t));
             }
             tex.Apply();
-            
-            // Save as PNG
+
             byte[] bytes = tex.EncodeToPNG();
             Object.DestroyImmediate(tex);
-            
+
             File.WriteAllBytes(fullPath, bytes);
             AssetDatabase.Refresh();
-            
-            // Enable Read/Write on the saved texture
+
             string assetPath = "Assets" + fullPath.Substring(Application.dataPath.Length);
             TextureImporter importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
             if (importer != null)
@@ -869,15 +837,14 @@ namespace GradationBaker.UI
                 importer.isReadable = true;
                 importer.SaveAndReimport();
             }
-            
-            // Highlight saved file in Project tab
+
             Object savedAsset = AssetDatabase.LoadAssetAtPath<Object>(assetPath);
             if (savedAsset != null)
             {
                 EditorGUIUtility.PingObject(savedAsset);
                 Selection.activeObject = savedAsset;
             }
-            
+
             FileLogger.Log($"[GradationBakerWindow] Gradient saved to: {fullPath}");
             _statusBar.Show(L("status_gradient_saved"), StatusBar.StatusType.Success);
         }
@@ -886,97 +853,73 @@ namespace GradationBaker.UI
         {
             string baseName = "gradient";
             string extension = ".png";
-            
-            // Check if base name exists
+
             string fullPath = Path.Combine(folderPath, baseName + extension).Replace('\\', '/');
             if (!File.Exists(fullPath))
-            {
                 return baseName + extension;
-            }
-            
-            // Find next available number
+
             int counter = 1;
             while (true)
             {
                 string numberedName = $"{baseName} {counter}{extension}";
                 fullPath = Path.Combine(folderPath, numberedName).Replace('\\', '/');
-                
+
                 if (!File.Exists(fullPath))
-                {
                     return numberedName;
-                }
-                
+
                 counter++;
-                
                 if (counter > 9999)
-                {
                     return $"{baseName}_{System.DateTime.Now:yyyyMMddHHmmss}{extension}";
-                }
             }
         }
 
         private void LoadGradientFromTexture()
         {
-            // Default to gradient directory
             string gradientDir = Path.Combine(Application.dataPath, "GeneratedGradation/gradation").Replace('\\', '/');
             if (!Directory.Exists(gradientDir))
-            {
                 gradientDir = Application.dataPath;
-            }
-            
-            string path = EditorUtility.OpenFilePanel(
-                "Load Gradient",
-                gradientDir,
-                "png"
-            );
-            
+
+            string path = EditorUtility.OpenFilePanel("Load Gradient", gradientDir, "png");
+
             if (string.IsNullOrEmpty(path)) return;
-            
-            // Convert to relative path if inside Assets
+
             if (path.StartsWith(Application.dataPath))
-            {
                 path = "Assets" + path.Substring(Application.dataPath.Length);
-            }
-            
+
             Texture2D tex = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
             if (tex == null)
             {
-                // Try loading from file directly
                 byte[] bytes = System.IO.File.ReadAllBytes(path);
                 tex = new Texture2D(2, 2);
                 tex.LoadImage(bytes);
             }
-            
+
             if (tex == null || tex.width < 2) return;
-            
-            // Create gradient from texture
+
             Gradient gradient = new Gradient();
-            
-            // Sample colors at key points
             int numKeys = Mathf.Min(8, tex.width);
             GradientColorKey[] colorKeys = new GradientColorKey[numKeys];
             GradientAlphaKey[] alphaKeys = new GradientAlphaKey[numKeys];
-            
+
             for (int i = 0; i < numKeys; i++)
             {
                 float t = i / (float)(numKeys - 1);
                 int x = Mathf.RoundToInt(t * (tex.width - 1));
                 Color c = tex.GetPixel(x, 0);
-                
+
                 colorKeys[i] = new GradientColorKey(c, t);
                 alphaKeys[i] = new GradientAlphaKey(c.a, t);
             }
-            
+
             gradient.SetKeys(colorKeys, alphaKeys);
             _settings.Gradient = gradient;
-            
+
             SceneView.RepaintAll();
             FileLogger.Log($"[GradationBakerWindow] Gradient loaded from: {path}");
         }
 
-        /// <summary>
-        /// Rounds a Vector3 to the specified number of decimal places
-        /// </summary>
+        // ─── Utilities ───────────────────────────────────────────────────────
+
         private Vector3 RoundVector3(Vector3 v, int decimals)
         {
             float multiplier = Mathf.Pow(10f, decimals);
@@ -987,9 +930,6 @@ namespace GradationBaker.UI
             );
         }
 
-        /// <summary>
-        /// Shorthand for localization
-        /// </summary>
         private string L(string key) => LocalizationManager.Get(key);
         private string L(string key, params object[] args) => LocalizationManager.Get(key, args);
 
