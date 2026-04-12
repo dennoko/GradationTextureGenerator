@@ -11,6 +11,7 @@ namespace GradationBaker.UI
 {
     public class GradationBakerWindow : EditorWindow
     {
+        [SerializeField]
         private GradationSettings _settings = new GradationSettings();
         private GradationBakingExecutor _baker = new GradationBakingExecutor();
         private GradationSceneHandle _sceneHandle = new GradationSceneHandle();
@@ -595,7 +596,7 @@ namespace GradationBaker.UI
             _preview.UpdatePreviewAll(_settings);
 
             // Main Handle
-            HandleChangeType changeType = _sceneHandle.DrawHandle(_settings, null);
+            HandleChangeType changeType = _sceneHandle.DrawHandle(_settings, this);
             
             // Mirror handle visualization
             if (_settings.UseMirror && _settings.MirrorAxis != MirrorAxis.None)
