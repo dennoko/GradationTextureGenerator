@@ -68,5 +68,6 @@
     "error_message": "Failed to save: {0}",
     "language": "Language",
     "mesh_item": "Mesh {0}",
-    "work": "Work"
+    "work": "Work",
+    "mesh_help": "Expand the toggle to configure for each mesh:\n• Change UV Channel\n• Use Mask Texture or Vertex Color\n• Split output by Material"
 }

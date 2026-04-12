@@ -248,6 +248,9 @@ namespace GradationBaker.UI
         {
             DrawSection(L("section_target_meshes"), () =>
             {
+                GUILayout.Label(L("mesh_help"), GradationBakerTheme.CaptionStyle);
+                EditorGUILayout.Space(2);
+
                 // Drag & Drop エリア
                 Rect dropArea = GUILayoutUtility.GetRect(0, 44, GUILayout.ExpandWidth(true), GUILayout.MinWidth(100));
                 EditorGUI.DrawRect(dropArea, GradationBakerTheme.Surface2);
