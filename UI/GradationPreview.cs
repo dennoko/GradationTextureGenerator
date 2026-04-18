@@ -134,7 +134,9 @@ namespace GradationBaker.UI
                 newSmr.sharedMesh = smr.sharedMesh;
                 newSmr.bones = smr.bones;
                 newSmr.rootBone = smr.rootBone;
-                newSmr.sharedMaterial = _previewMaterial;
+                var smrMats = new Material[Mathf.Max(1, smr.sharedMaterials.Length)];
+                for (int i = 0; i < smrMats.Length; i++) smrMats[i] = _previewMaterial;
+                newSmr.sharedMaterials = smrMats;
                 newSmr.updateWhenOffscreen = true;
                 proxy.SkinnedRenderer = newSmr;
             }
@@ -150,7 +152,9 @@ namespace GradationBaker.UI
                 if (sourceMf != null) proxy.MeshFilter.sharedMesh = sourceMf.sharedMesh;
                 
                 proxy.MeshRenderer = go.AddComponent<MeshRenderer>();
-                proxy.MeshRenderer.sharedMaterial = _previewMaterial;
+                var mrMats = new Material[Mathf.Max(1, mr.sharedMaterials.Length)];
+                for (int i = 0; i < mrMats.Length; i++) mrMats[i] = _previewMaterial;
+                proxy.MeshRenderer.sharedMaterials = mrMats;
             }
             else
             {

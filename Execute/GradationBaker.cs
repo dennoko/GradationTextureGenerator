@@ -204,17 +204,20 @@ namespace GradationBaker.Execute
             }
             else
             {
-                // Single pass for all submeshes
+                // Draw all submeshes into a single texture
                 GL.Clear(true, true, clearColor);
                 if (mat.SetPass(0))
                 {
-                    Graphics.DrawMeshNow(mesh, Matrix4x4.identity);
+                    for (int i = 0; i < mesh.subMeshCount; i++)
+                    {
+                        Graphics.DrawMeshNow(mesh, Matrix4x4.identity, i);
+                    }
                 }
-                
+
                 Texture2D mainTex = new Texture2D(res, res, TextureFormat.ARGB32, false);
                 mainTex.ReadPixels(new Rect(0, 0, res, res), 0, 0);
                 mainTex.Apply();
-                
+
                 result.Texture = mainTex;
             }
 
