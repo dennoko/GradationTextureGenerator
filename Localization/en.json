@@ -49,6 +49,7 @@
     "use_vertex_color": "Use Vertex Color",
     "invert_mask": "Invert Mask",
     "split_by_material": "Split by Material",
+    "material_slots": "Materials",
     "status_idle": "Idle...",
     "status_bake_success": "Success: Saved {0} textures",
     "status_bake_error": "Error: Backup failed",

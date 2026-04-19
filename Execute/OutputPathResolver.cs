@@ -19,7 +19,8 @@ namespace GradationBaker.Execute
                 string texturePath = GetMainTexturePath(renderer);
                 if (!string.IsNullOrEmpty(texturePath))
                 {
-                    return Path.GetDirectoryName(texturePath).Replace('\\', '/');
+                    string textureDir = Path.GetDirectoryName(texturePath).Replace('\\', '/');
+                    return textureDir + "/gradation";
                 }
             }
             

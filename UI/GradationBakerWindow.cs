@@ -82,6 +82,7 @@ namespace GradationBaker.UI
                     entry.MaskTexture = _settings.MaskTexture;
                     entry.UseVertexColorMask = _settings.UseVertexColorMask;
                     entry.InvertMask = _settings.InvertMask;
+                    entry.SyncMaterialSlots(entry.SourceRenderer);
                 }
 
                 // Work mesh status label
@@ -142,6 +143,30 @@ namespace GradationBaker.UI
                     Rect splitRect = new Rect(rect.x + indent + labelW, y, 200, lineHeight);
                     entry.SplitByMaterial = EditorGUI.ToggleLeft(splitRect, L("split_by_material"), entry.SplitByMaterial);
 
+                    y += lineHeight + 2;
+
+                    // Per-material slot enable/disable toggles
+                    Renderer activeRenderer = entry.ActiveRenderer;
+                    if (activeRenderer != null)
+                    {
+                        entry.SyncMaterialSlots(activeRenderer);
+                        Material[] mats = activeRenderer.sharedMaterials;
+                        if (mats.Length > 0)
+                        {
+                            Rect slotHeaderRect = new Rect(rect.x + indent, y, labelW, lineHeight);
+                            GUI.Label(slotHeaderRect, L("material_slots"), labelStyle);
+                            y += lineHeight + 2;
+
+                            for (int mi = 0; mi < mats.Length; mi++)
+                            {
+                                string matName = (mats[mi] != null) ? mats[mi].name : $"Slot {mi}";
+                                Rect toggleRect = new Rect(rect.x + indent + labelW, y, contentW, lineHeight);
+                                entry.EnabledMaterialSlots[mi] = EditorGUI.ToggleLeft(toggleRect, matName, entry.EnabledMaterialSlots[mi]);
+                                y += lineHeight + 2;
+                            }
+                        }
+                    }
+
                     if (EditorGUI.EndChangeCheck())
                     {
                         SceneView.RepaintAll();
@@ -155,7 +180,10 @@ namespace GradationBaker.UI
                 var entry = _settings.MeshEntries[index];
                 if (entry.ShowDetails)
                 {
-                    return (EditorGUIUtility.singleLineHeight + 2) * 5 + 10;
+                    int matCount = entry.ActiveRenderer != null ? entry.ActiveRenderer.sharedMaterials.Length : 0;
+                    // base 5 lines + header line + one line per slot (when renderer is set)
+                    int extraLines = matCount > 0 ? 1 + matCount : 0;
+                    return (EditorGUIUtility.singleLineHeight + 2) * (5 + extraLines) + 10;
                 }
                 return EditorGUIUtility.singleLineHeight + 6;
             };

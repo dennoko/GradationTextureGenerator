@@ -175,6 +175,8 @@ namespace GradationBaker.Execute
             {
                 for (int i = 0; i < mesh.subMeshCount; i++)
                 {
+                    if (!entry.IsMaterialSlotEnabled(i)) continue;
+
                     GL.Clear(true, true, clearColor);
 
                     if (mat.SetPass(0))
@@ -204,12 +206,13 @@ namespace GradationBaker.Execute
             }
             else
             {
-                // Draw all submeshes into a single texture
+                // Draw all enabled submeshes into a single texture
                 GL.Clear(true, true, clearColor);
                 if (mat.SetPass(0))
                 {
                     for (int i = 0; i < mesh.subMeshCount; i++)
                     {
+                        if (!entry.IsMaterialSlotEnabled(i)) continue;
                         Graphics.DrawMeshNow(mesh, Matrix4x4.identity, i);
                     }
                 }

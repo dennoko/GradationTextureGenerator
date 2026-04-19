@@ -9,6 +9,7 @@ namespace GradationBaker.UI
     {
         private const string ShaderPath = "Hidden/GradationBaker/Preview";
         private Material _previewMaterial;
+        private Material _disabledMaterial;
         private Texture2D _lutTexture;
 
         private class ProxyEntry
@@ -33,6 +34,13 @@ namespace GradationBaker.UI
                 if (shader == null) return;
                 _previewMaterial = new Material(shader);
                 _previewMaterial.hideFlags = HideFlags.HideAndDontSave;
+            }
+
+            if (_disabledMaterial == null)
+            {
+                _disabledMaterial = new Material(Shader.Find("Sprites/Default"));
+                _disabledMaterial.color = Color.clear;
+                _disabledMaterial.hideFlags = HideFlags.HideAndDontSave;
             }
 
             // Update LUT
@@ -88,6 +96,12 @@ namespace GradationBaker.UI
                 proxy.ProxyObject.transform.localScale = renderer.transform.lossyScale;
             }
 
+            // Update proxy materials per slot (enabled → preview, disabled → transparent)
+            int slotCount = Mathf.Max(1, renderer.sharedMaterials.Length);
+            var proxyMats = new Material[slotCount];
+            for (int i = 0; i < slotCount; i++)
+                proxyMats[i] = entry.IsMaterialSlotEnabled(i) ? _previewMaterial : _disabledMaterial;
+
             // Use MaterialPropertyBlock for per-mesh settings
             MaterialPropertyBlock block = new MaterialPropertyBlock();
             block.SetInt("_UVChannel", entry.UVChannel);
@@ -105,10 +119,12 @@ namespace GradationBaker.UI
 
             if (proxy.SkinnedRenderer != null)
             {
+                proxy.SkinnedRenderer.sharedMaterials = proxyMats;
                 proxy.SkinnedRenderer.SetPropertyBlock(block);
             }
             else if (proxy.MeshRenderer != null)
             {
+                proxy.MeshRenderer.sharedMaterials = proxyMats;
                 proxy.MeshRenderer.SetPropertyBlock(block);
             }
         }
@@ -225,6 +241,7 @@ namespace GradationBaker.UI
             ClearProxies();
 
             if (_previewMaterial != null) Object.DestroyImmediate(_previewMaterial);
+            if (_disabledMaterial != null) Object.DestroyImmediate(_disabledMaterial);
             if (_lutTexture != null) Object.DestroyImmediate(_lutTexture);
         }
     }

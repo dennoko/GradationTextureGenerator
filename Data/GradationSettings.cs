@@ -52,9 +52,24 @@ namespace GradationBaker.Data
         
         // Multi-material support
         public bool SplitByMaterial = true;
-        
+        public List<bool> EnabledMaterialSlots = new List<bool>();
+
         // UI state
         public bool ShowDetails = false;
+
+        public bool IsMaterialSlotEnabled(int index)
+        {
+            if (index < 0 || index >= EnabledMaterialSlots.Count) return true;
+            return EnabledMaterialSlots[index];
+        }
+
+        public void SyncMaterialSlots(Renderer renderer)
+        {
+            int count = renderer != null ? renderer.sharedMaterials.Length : 0;
+            while (EnabledMaterialSlots.Count < count) EnabledMaterialSlots.Add(true);
+            if (EnabledMaterialSlots.Count > count)
+                EnabledMaterialSlots.RemoveRange(count, EnabledMaterialSlots.Count - count);
+        }
         
         public Renderer ActiveRenderer => WorkMeshObject != null 
             ? WorkMeshObject.GetComponent<Renderer>() 
