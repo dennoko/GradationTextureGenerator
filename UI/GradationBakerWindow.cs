@@ -13,10 +13,13 @@ namespace GradationBaker.UI
     {
         [SerializeField]
         private GradationSettings _settings = new GradationSettings();
-        private GradationBakingExecutor _baker = new GradationBakingExecutor();
-        private GradationSceneHandle _sceneHandle = new GradationSceneHandle();
-        private GradationPreview _preview = new GradationPreview();
-        private StatusBar _statusBar = new StatusBar();
+
+        // ScriptableObject のコンストラクタ (フィールドイニシャライザ) では
+        // Unity API を呼べないため、生成は OnEnable で行う
+        private GradationBakingExecutor _baker;
+        private GradationSceneHandle _sceneHandle;
+        private GradationPreview _preview;
+        private StatusBar _statusBar;
 
         // ReorderableList for meshes
         private ReorderableList _meshList;
@@ -34,6 +37,14 @@ namespace GradationBaker.UI
 
         private void OnEnable()
         {
+            // ドメインリロードやデシリアライズのタイミング次第で
+            // フィールドイニシャライザに頼れないケースがあるため明示的に再生成する
+            if (_settings == null)    _settings    = new GradationSettings();
+            if (_baker == null)       _baker       = new GradationBakingExecutor();
+            if (_sceneHandle == null) _sceneHandle = new GradationSceneHandle();
+            if (_preview == null)     _preview     = new GradationPreview();
+            if (_statusBar == null)   _statusBar   = new StatusBar();
+
             SceneView.duringSceneGui += OnSceneGUI;
             LocalizationManager.Initialize();
             SetupMeshList();
@@ -42,14 +53,23 @@ namespace GradationBaker.UI
         private void OnDisable()
         {
             SceneView.duringSceneGui -= OnSceneGUI;
-            _sceneHandle.Cleanup();
-            _preview.Cleanup();
+            _sceneHandle?.Cleanup();
+            _preview?.Cleanup();
             CleanupAllWorkMeshes();
+            NdmfPreviewBridge.RestorePreview();
         }
 
         private void SetupMeshList()
         {
             _meshList = new ReorderableList(_settings.MeshEntries, typeof(MeshEntry), true, false, false, false);
+
+            // Unity スキンのリスト背景 (ライトモードで明るくなる) を無効化してテーマ色で塗る
+            _meshList.showDefaultBackground = false;
+            _meshList.drawElementBackgroundCallback = (Rect rect, int index, bool isActive, bool isFocused) =>
+            {
+                if (Event.current.type != EventType.Repaint) return;
+                EditorGUI.DrawRect(rect, isActive ? GradationBakerTheme.Surface2 : GradationBakerTheme.Surface1);
+            };
 
             _meshList.drawElementCallback = (Rect rect, int index, bool isActive, bool isFocused) =>
             {
@@ -89,14 +109,12 @@ namespace GradationBaker.UI
                 Rect statusRect = new Rect(rect.x + 20 + fieldWidth + spacing, headerRect.y, statusWidth, lineHeight);
                 if (entry.HasWorkMesh)
                 {
-                    var captionStyle = new GUIStyle(EditorStyles.miniLabel);
-                    captionStyle.normal.textColor = GradationBakerTheme.TextTertiary;
-                    GUI.Label(statusRect, "[" + L("work") + "]", captionStyle);
+                    GUI.Label(statusRect, "[" + L("work") + "]", GradationBakerTheme.CaptionStyle);
                 }
 
                 // Remove button
                 Rect removeRect = new Rect(rect.x + rect.width - removeWidth, headerRect.y, removeWidth, lineHeight);
-                if (GUI.Button(removeRect, "×", EditorStyles.miniButton))
+                if (GUI.Button(removeRect, "×", GradationBakerTheme.MiniButtonStyle))
                 {
                     RemoveMeshEntry(index);
                 }
@@ -111,8 +129,7 @@ namespace GradationBaker.UI
                     float labelW = 80f;
                     float contentW = rect.width - indent - labelW - 10;
 
-                    var labelStyle = new GUIStyle(EditorStyles.miniLabel);
-                    labelStyle.normal.textColor = GradationBakerTheme.TextSecondary;
+                    GUIStyle labelStyle = GradationBakerTheme.MiniLabelStyle;
 
                     // UV Channel
                     Rect uvLabelRect = new Rect(rect.x + indent, y, labelW, lineHeight);
@@ -194,7 +211,21 @@ namespace GradationBaker.UI
         private void OnGUI()
         {
             GradationBakerTheme.Initialize();
+            // ライト/ダークどちらの Editor テーマでも見た目を変えないよう
+            // EditorStyles をテーマ色で一時上書きする (finally で必ず復元)
+            GradationBakerTheme.PushEditorTheme();
+            try
+            {
+                DrawWindowContents();
+            }
+            finally
+            {
+                GradationBakerTheme.PopEditorTheme();
+            }
+        }
 
+        private void DrawWindowContents()
+        {
             // ウィンドウ全面に surface.level0 を塗る
             EditorGUI.DrawRect(new Rect(0, 0, position.width, position.height), GradationBakerTheme.Surface0);
 
@@ -241,7 +272,7 @@ namespace GradationBaker.UI
 
             // フッター: Bake ボタン
             GUILayout.BeginVertical(GradationBakerTheme.CardStyle);
-            if (GUILayout.Button("🎨 " + L("bake_and_save"), GradationBakerTheme.ActionButtonStyle))
+            if (GUILayout.Button(L("bake_and_save"), GradationBakerTheme.ActionButtonStyle))
             {
                 BakeAndSave();
             }
@@ -260,9 +291,12 @@ namespace GradationBaker.UI
             GUILayout.Space(8);
             GUILayout.Label("Gradation Baker", GradationBakerTheme.TitleStyle);
             GUILayout.FlexibleSpace();
+            EditorGUI.BeginChangeCheck();
             _settings.IsToolActive = EditorGUILayout.ToggleLeft(
                 L("enable_tool"), _settings.IsToolActive,
                 GradationBakerTheme.SecondaryTextStyle, GUILayout.Width(120));
+            // 無効化時にプレビュープロキシの除去と NDMF プレビュー再開を即時反映する
+            if (EditorGUI.EndChangeCheck()) SceneView.RepaintAll();
             if (LocalizationManager.DrawLanguageSelector()) Repaint();
             GUILayout.Space(6);
             GUILayout.EndHorizontal();
@@ -290,10 +324,7 @@ namespace GradationBaker.UI
                 EditorGUI.DrawRect(new Rect(dropArea.x, dropArea.y, 1, dropArea.height), borderColor);
                 EditorGUI.DrawRect(new Rect(dropArea.xMax - 1, dropArea.y, 1, dropArea.height), borderColor);
 
-                var dropLabelStyle = new GUIStyle(EditorStyles.centeredGreyMiniLabel);
-                dropLabelStyle.normal.textColor = GradationBakerTheme.TextTertiary;
-                dropLabelStyle.fontStyle = FontStyle.Italic;
-                GUI.Label(dropArea, L("drop_meshes_here"), dropLabelStyle);
+                GUI.Label(dropArea, L("drop_meshes_here"), GradationBakerTheme.DropAreaLabelStyle);
                 HandleDragAndDrop(dropArea);
 
                 if (_settings.MeshEntries.Count > 0)
@@ -385,18 +416,19 @@ namespace GradationBaker.UI
                 {
                     if (!resetClicked && !centerResetClicked)
                     {
-                        _settings.BoxCenter = RoundVector3(center, 2);
-                        _settings.BoxRotation = Quaternion.Euler(RoundVector3(euler, 2));
+                        // 入力中に丸めると "0.005" のような値が打てなくなるため、丸めずそのまま反映する
+                        _settings.BoxCenter = center;
+                        _settings.BoxRotation = Quaternion.Euler(euler);
 
                         if (_settings.Shape == GradationShape.Linear)
                         {
-                            _settings.BoxHeight = Mathf.Max(0.01f, Mathf.Round(height * 100f) / 100f);
+                            _settings.BoxHeight = Mathf.Max(0.001f, height);
                         }
                         else
                         {
-                            _settings.BoxWidth  = Mathf.Max(0.01f, Mathf.Round(size.x * 100f) / 100f);
-                            _settings.BoxHeight = Mathf.Max(0.01f, Mathf.Round(size.y * 100f) / 100f);
-                            _settings.BoxDepth  = Mathf.Max(0.01f, Mathf.Round(size.z * 100f) / 100f);
+                            _settings.BoxWidth  = Mathf.Max(0.001f, size.x);
+                            _settings.BoxHeight = Mathf.Max(0.001f, size.y);
+                            _settings.BoxDepth  = Mathf.Max(0.001f, size.z);
                         }
                     }
                     SceneView.RepaintAll();
@@ -413,9 +445,14 @@ namespace GradationBaker.UI
 
                 if (_settings.UseMirror)
                 {
-                    string[] axisOptions = { L("mirror_none"), "X", "Y", "Z" };
-                    _settings.MirrorAxis = (MirrorAxis)EditorGUILayout.Popup(
-                        L("mirror_axis"), (int)_settings.MirrorAxis, axisOptions);
+                    // 「なし」は UseMirror トグルと重複するためドロップダウンには出さない
+                    if (_settings.MirrorAxis == MirrorAxis.None)
+                        _settings.MirrorAxis = MirrorAxis.X;
+
+                    string[] axisOptions = { "X", "Y", "Z" };
+                    int axisIndex = (int)_settings.MirrorAxis - 1;
+                    axisIndex = EditorGUILayout.Popup(L("mirror_axis"), axisIndex, axisOptions);
+                    _settings.MirrorAxis = (MirrorAxis)(axisIndex + 1);
 
                     string[] blendOptions = { L("mirror_blend_max"), L("mirror_blend_min") };
                     _settings.MirrorBlend = (MirrorBlendMode)EditorGUILayout.Popup(
@@ -461,6 +498,13 @@ namespace GradationBaker.UI
                         }
                     }
                     EditorGUILayout.EndHorizontal();
+
+                    // Assets 外のフォルダは PNG 保存はできるがインポート設定の自動調整が効かない
+                    if (!string.IsNullOrEmpty(_settings.SavePath) &&
+                        !_settings.SavePath.Replace('\\', '/').StartsWith("Assets"))
+                    {
+                        GUILayout.Label(L("save_path_outside_assets"), GradationBakerTheme.CaptionStyle);
+                    }
                 }
 
                 string[] bgOptions = { L("bg_transparent"), L("bg_white"), L("bg_black") };
@@ -486,9 +530,16 @@ namespace GradationBaker.UI
                 EditorGUILayout.BeginHorizontal();
                 GUILayout.Label(L("blend_mode"), GradationBakerTheme.SecondaryTextStyle, GUILayout.Width(60));
                 EditorGUI.BeginChangeCheck();
-                _settings.BlendMode = (PreviewBlendMode)EditorGUILayout.EnumPopup(_settings.BlendMode);
+                string[] blendModeOptions = { L("blend_replace"), L("blend_additive"), L("blend_screen"), L("blend_multiply") };
+                _settings.BlendMode = (PreviewBlendMode)EditorGUILayout.Popup((int)_settings.BlendMode, blendModeOptions);
                 if (EditorGUI.EndChangeCheck()) SceneView.RepaintAll();
                 EditorGUILayout.EndHorizontal();
+
+                if (NdmfPreviewBridge.IsSuppressing)
+                {
+                    EditorGUILayout.Space(2);
+                    GUILayout.Label(L("ndmf_preview_suspended"), GradationBakerTheme.CaptionStyle);
+                }
             });
         }
 
@@ -588,6 +639,14 @@ namespace GradationBaker.UI
                             else if (obj is Renderer r)
                                 renderer = r;
 
+                            // NDMF プレビューのプロキシが渡された場合は元のレンダラーに解決する
+                            if (renderer != null)
+                            {
+                                GameObject original = NdmfPreviewBridge.ResolveOriginal(renderer.gameObject);
+                                if (original != renderer.gameObject)
+                                    renderer = original.GetComponent<Renderer>();
+                            }
+
                             if (renderer != null)
                             {
                                 bool alreadyExists = false;
@@ -621,11 +680,19 @@ namespace GradationBaker.UI
 
         private void OnSceneGUI(SceneView sceneView)
         {
+            // リコンパイル直後などにフィールドが未初期化のまま呼ばれることがある
+            if (_settings == null || _preview == null || _sceneHandle == null) return;
+
             if (!_settings.IsToolActive || _settings.MeshEntries.Count == 0)
             {
                 _preview.ClearProxies();
+                NdmfPreviewBridge.RestorePreview();
                 return;
             }
+
+            // 本ツールのプレビュー表示中は NDMF プレビューを一時停止し、
+            // ベイク対象 (元メッシュ) とシーン上の見た目を一致させる
+            NdmfPreviewBridge.SuppressPreview();
 
             _preview.UpdatePreviewAll(_settings);
 
@@ -645,12 +712,67 @@ namespace GradationBaker.UI
             FileLogger.Clear();
             FileLogger.Log("[GradationBakerWindow] Bake & Save clicked.");
 
-            var results = _baker.BakeAll(_settings);
+            List<BakeResult> results;
             int savedCount = 0;
             List<string> savedPaths = new List<string>();
 
+            try
+            {
+                results = _baker.BakeAll(_settings, (current, total, name) =>
+                    EditorUtility.DisplayProgressBar(
+                        "Gradation Baker",
+                        L("progress_baking", name, current, total),
+                        (current - 1) / (float)total));
+
+                SaveBakeResults(results, savedPaths, ref savedCount);
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+
+            AssetDatabase.Refresh();
+
+            if (_settings.BgColor == BackgroundColor.Transparent)
+            {
+                foreach (string fullPath in savedPaths)
+                {
+                    if (!TryGetAssetPath(fullPath, out string assetPath)) continue;
+                    TextureImporter importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
+                    if (importer != null)
+                    {
+                        importer.alphaIsTransparency = true;
+                        importer.SaveAndReimport();
+                    }
+                }
+            }
+
+            if (savedCount > 0)
+            {
+                string message = L("status_bake_success", savedCount);
+                _statusBar.Show(message, StatusBar.StatusType.Success);
+
+                if (savedPaths.Count > 0 && TryGetAssetPath(savedPaths[0], out string firstAssetPath))
+                {
+                    Object textureAsset = AssetDatabase.LoadAssetAtPath<Object>(firstAssetPath);
+                    if (textureAsset != null)
+                    {
+                        EditorGUIUtility.PingObject(textureAsset);
+                        Selection.activeObject = textureAsset;
+                    }
+                }
+            }
+            else
+            {
+                _statusBar.Show(L("status_bake_error"), StatusBar.StatusType.Error, 0);
+            }
+        }
+
+        private void SaveBakeResults(List<BakeResult> results, List<string> savedPaths, ref int savedCount)
+        {
             foreach (var result in results)
             {
+                if (result == null) continue;
                 if (result.Texture == null && (result.SubMeshResults == null || result.SubMeshResults.Count == 0)) continue;
 
                 string outputFolder = OutputPathResolver.ResolveOutputFolder(
@@ -693,45 +815,6 @@ namespace GradationBaker.UI
                     savedPaths.Add(fullPath);
                     savedCount++;
                 }
-            }
-
-            AssetDatabase.Refresh();
-
-            if (_settings.BgColor == BackgroundColor.Transparent)
-            {
-                foreach (string fullPath in savedPaths)
-                {
-                    string assetPath = "Assets" + fullPath.Substring(Application.dataPath.Length);
-                    TextureImporter importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
-                    if (importer != null)
-                    {
-                        importer.alphaIsTransparency = true;
-                        importer.SaveAndReimport();
-                    }
-                }
-            }
-
-            if (savedCount > 0)
-            {
-                string message = L("status_bake_success", savedCount);
-                _statusBar.Show(message, StatusBar.StatusType.Success);
-
-                if (savedPaths.Count > 0)
-                {
-                    string firstPath = savedPaths[0];
-                    string assetPath = "Assets" + firstPath.Substring(Application.dataPath.Length);
-
-                    Object textureAsset = AssetDatabase.LoadAssetAtPath<Object>(assetPath);
-                    if (textureAsset != null)
-                    {
-                        EditorGUIUtility.PingObject(textureAsset);
-                        Selection.activeObject = textureAsset;
-                    }
-                }
-            }
-            else
-            {
-                _statusBar.Show(L("status_bake_error"), StatusBar.StatusType.Error, 0);
             }
         }
 
@@ -820,6 +903,7 @@ namespace GradationBaker.UI
 
         private void CleanupAllWorkMeshes()
         {
+            if (_settings == null) return;
             foreach (var entry in _settings.MeshEntries)
             {
                 if (entry.HasWorkMesh)
@@ -928,14 +1012,23 @@ namespace GradationBaker.UI
                 path = "Assets" + path.Substring(Application.dataPath.Length);
 
             Texture2D tex = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
-            if (tex == null)
+            bool ownsTex = false;
+            // Read/Write 無効のアセットは GetPixel できないため、PNG を直接読み込む
+            if (tex == null || !tex.isReadable)
             {
-                byte[] bytes = System.IO.File.ReadAllBytes(path);
+                string fullPath = tex != null ? OutputPathResolver.ToFullPath(path) : path;
+                if (!File.Exists(fullPath)) return;
+                byte[] bytes = File.ReadAllBytes(fullPath);
                 tex = new Texture2D(2, 2);
                 tex.LoadImage(bytes);
+                ownsTex = true;
             }
 
-            if (tex == null || tex.width < 2) return;
+            if (tex == null || tex.width < 2)
+            {
+                if (ownsTex && tex != null) Object.DestroyImmediate(tex);
+                return;
+            }
 
             Gradient gradient = new Gradient();
             int numKeys = Mathf.Min(8, tex.width);
@@ -955,20 +1048,29 @@ namespace GradationBaker.UI
             gradient.SetKeys(colorKeys, alphaKeys);
             _settings.Gradient = gradient;
 
+            if (ownsTex) Object.DestroyImmediate(tex);
+
             SceneView.RepaintAll();
             FileLogger.Log($"[GradationBakerWindow] Gradient loaded from: {path}");
         }
 
         // ─── Utilities ───────────────────────────────────────────────────────
 
-        private Vector3 RoundVector3(Vector3 v, int decimals)
+        /// <summary>
+        /// フルパスを Assets/ 相対のアセットパスに変換する。
+        /// プロジェクト外 (Assets 配下でない) 場合は false を返す。
+        /// </summary>
+        private static bool TryGetAssetPath(string fullPath, out string assetPath)
         {
-            float multiplier = Mathf.Pow(10f, decimals);
-            return new Vector3(
-                Mathf.Round(v.x * multiplier) / multiplier,
-                Mathf.Round(v.y * multiplier) / multiplier,
-                Mathf.Round(v.z * multiplier) / multiplier
-            );
+            string normalized = fullPath.Replace('\\', '/');
+            string dataPath = Application.dataPath;
+            if (normalized.StartsWith(dataPath))
+            {
+                assetPath = "Assets" + normalized.Substring(dataPath.Length);
+                return true;
+            }
+            assetPath = null;
+            return false;
         }
 
         private string L(string key) => LocalizationManager.Get(key);

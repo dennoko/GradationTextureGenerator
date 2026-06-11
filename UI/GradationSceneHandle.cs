@@ -205,22 +205,36 @@ namespace GradationBaker.UI
             Handles.DrawLine(t3, b3);
         }
 
+        // 毎リペイントで GUIStyle / Texture2D を生成するとテクスチャがリークするため static にキャッシュする
+        private static GUIStyle _labelBgStyle;
+        private static Texture2D _labelBgTexture;
+
+        private static GUIStyle GetLabelStyle()
+        {
+            // ドメインリロード後はテクスチャが消えるため Unity null 比較で再生成する
+            if (!_labelBgTexture)
+            {
+                _labelBgTexture = MakeTexture(1, 1, new Color(0, 0, 0, 0.5f));
+                _labelBgStyle = null;
+            }
+
+            if (_labelBgStyle == null)
+            {
+                _labelBgStyle = new GUIStyle
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontSize = 12,
+                    fontStyle = FontStyle.Bold,
+                    normal = { textColor = Color.white, background = _labelBgTexture }
+                };
+            }
+            return _labelBgStyle;
+        }
+
         private void DrawLabels(GradationSettings settings, Vector3 topPos, Vector3 bottomPos, float handleSize)
         {
-            GUIStyle labelStyle = new GUIStyle
-            {
-                normal = { textColor = Color.white },
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 12,
-                fontStyle = FontStyle.Bold
-            };
-            
-            // Add background for better visibility
-            GUIStyle bgStyle = new GUIStyle(labelStyle)
-            {
-                normal = { background = MakeTexture(1, 1, new Color(0, 0, 0, 0.5f)) }
-            };
-            
+            GUIStyle bgStyle = GetLabelStyle();
+
             Vector3 offset = settings.BoxRotation * Vector3.right * handleSize * 0.5f;
             Handles.Label(topPos + offset, $"Max (1.0)", bgStyle);
             Handles.Label(bottomPos + offset, $"Min (0.0)", bgStyle);
@@ -230,7 +244,7 @@ namespace GradationBaker.UI
             Handles.Label(midPoint, $"Height: {settings.BoxHeight:F2}", bgStyle);
         }
         
-        private Texture2D MakeTexture(int width, int height, Color color)
+        private static Texture2D MakeTexture(int width, int height, Color color)
         {
             Color[] pixels = new Color[width * height];
             for (int i = 0; i < pixels.Length; i++)

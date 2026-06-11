@@ -52,7 +52,7 @@
     "material_slots": "Materials",
     "status_idle": "Idle...",
     "status_bake_success": "Success: Saved {0} textures",
-    "status_bake_error": "Error: Backup failed",
+    "status_bake_error": "Error: Failed to save textures",
     "status_gradient_saved": "Gradient saved",
     "section_target_meshes": "TARGET MESHES",
     "section_gradient": "GRADIENT",
@@ -70,5 +70,12 @@
     "language": "Language",
     "mesh_item": "Mesh {0}",
     "work": "Work",
-    "mesh_help": "Expand the toggle to configure for each mesh:\n• Change UV Channel\n• Use Mask Texture or Vertex Color\n• Split output by Material"
+    "mesh_help": "Expand the toggle to configure for each mesh:\n• Change UV Channel\n• Use Mask Texture or Vertex Color\n• Split output by Material",
+    "ndmf_preview_suspended": "* NDMF preview is temporarily suspended (resumes when this tool's preview ends)",
+    "progress_baking": "Baking: {0} ({1}/{2})",
+    "save_path_outside_assets": "* Folder is outside Assets. PNGs will be saved, but import settings will not be adjusted automatically",
+    "blend_replace": "Replace",
+    "blend_additive": "Additive",
+    "blend_screen": "Screen",
+    "blend_multiply": "Multiply"
 }

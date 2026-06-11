@@ -90,17 +90,33 @@ namespace GradationBaker.Localization
 
         private static string GetLocalizationFolderPath()
         {
-            // Find the script's location and derive the Localization folder path
-            string[] guids = AssetDatabase.FindAssets("LocalizationManager t:Script");
-            if (guids.Length > 0)
+            // 1) このソースファイル自身のパスから導出する (最も確実)。
+            //    FindAssets による名前検索は、他ツール (例: FastAOBaker) の同名スクリプトが
+            //    先にヒットすると誤ったフォルダを返すため使わない。
+            string sourcePath = GetSourceFilePath();
+            if (!string.IsNullOrEmpty(sourcePath) && File.Exists(sourcePath))
             {
-                string scriptPath = AssetDatabase.GUIDToAssetPath(guids[0]);
-                return Path.GetDirectoryName(scriptPath).Replace('\\', '/');
+                return Path.GetDirectoryName(sourcePath).Replace('\\', '/');
             }
-            
-            // Fallback path
+
+            // 2) AssetDatabase 検索 (パスにこのツールのフォルダが含まれるものだけ採用)
+            string[] guids = AssetDatabase.FindAssets("LocalizationManager t:Script");
+            foreach (string guid in guids)
+            {
+                string scriptPath = AssetDatabase.GUIDToAssetPath(guid);
+                if (scriptPath.Contains("GradationBaker"))
+                {
+                    return Path.GetDirectoryName(scriptPath).Replace('\\', '/');
+                }
+            }
+
+            // 3) Fallback path
             return "Assets/Editor/GradationBaker/Localization";
         }
+
+        /// <summary>コンパイル時にこのファイルの絶対パスが埋め込まれる。</summary>
+        private static string GetSourceFilePath(
+            [System.Runtime.CompilerServices.CallerFilePath] string path = null) => path;
 
         /// <summary>
         /// Simple JSON parser for flat string dictionaries

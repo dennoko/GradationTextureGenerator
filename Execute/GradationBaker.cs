@@ -11,14 +11,20 @@ namespace GradationBaker.Execute
         /// <summary>
         /// Bakes gradation textures for all mesh entries (with optional mirror)
         /// </summary>
-        public List<BakeResult> BakeAll(GradationSettings settings)
+        /// <param name="onProgress">進捗通知 (current, total, name)。プログレスバー表示用 (省略可)</param>
+        public List<BakeResult> BakeAll(GradationSettings settings, System.Action<int, int, string> onProgress = null)
         {
             var results = new List<BakeResult>();
-            
+            int total = settings.MeshEntries.Count;
+            int current = 0;
+
             foreach (var entry in settings.MeshEntries)
             {
+                current++;
                 Renderer renderer = entry.ActiveRenderer;
                 if (renderer == null) continue;
+
+                onProgress?.Invoke(current, total, renderer.name);
                 
                 // Bake main gradation (or split based on settings)
                 BakeResult bakeResult = Bake(settings, entry, false);
@@ -99,8 +105,9 @@ namespace GradationBaker.Execute
             Shader shader = Shader.Find(ShaderPath);
             if (shader == null)
             {
+                // null を返すと呼び出し側 (BakeAll / Window) で NRE になるため空の結果を返す
                 FileLogger.LogError($"[GradationBaker] Shader not found at {ShaderPath}.");
-                return null;
+                return result;
             }
             Material mat = new Material(shader);
 
@@ -258,35 +265,37 @@ namespace GradationBaker.Execute
         /// </summary>
         private void BlendTextures(Texture2D baseT, Texture2D overlayTex, MirrorBlendMode blendMode)
         {
-            Color[] basePixels = baseT.GetPixels();
-            Color[] overlayPixels = overlayTex.GetPixels();
+            // Color32 (byte) で処理することで float 変換コストとメモリを削減する
+            Color32[] basePixels = baseT.GetPixels32();
+            Color32[] overlayPixels = overlayTex.GetPixels32();
+            bool useMin = blendMode == MirrorBlendMode.Min;
 
             for (int i = 0; i < basePixels.Length; i++)
             {
-                Color baseC = basePixels[i];
-                Color overC = overlayPixels[i];
+                Color32 baseC = basePixels[i];
+                Color32 overC = overlayPixels[i];
 
-                if (blendMode == MirrorBlendMode.Min)
+                if (useMin)
                 {
-                    basePixels[i] = new Color(
-                        Mathf.Min(baseC.r, overC.r),
-                        Mathf.Min(baseC.g, overC.g),
-                        Mathf.Min(baseC.b, overC.b),
-                        Mathf.Min(baseC.a, overC.a)
+                    basePixels[i] = new Color32(
+                        baseC.r < overC.r ? baseC.r : overC.r,
+                        baseC.g < overC.g ? baseC.g : overC.g,
+                        baseC.b < overC.b ? baseC.b : overC.b,
+                        baseC.a < overC.a ? baseC.a : overC.a
                     );
                 }
                 else // Max (default)
                 {
-                    basePixels[i] = new Color(
-                        Mathf.Max(baseC.r, overC.r),
-                        Mathf.Max(baseC.g, overC.g),
-                        Mathf.Max(baseC.b, overC.b),
-                        Mathf.Max(baseC.a, overC.a)
+                    basePixels[i] = new Color32(
+                        baseC.r > overC.r ? baseC.r : overC.r,
+                        baseC.g > overC.g ? baseC.g : overC.g,
+                        baseC.b > overC.b ? baseC.b : overC.b,
+                        baseC.a > overC.a ? baseC.a : overC.a
                     );
                 }
             }
 
-            baseT.SetPixels(basePixels);
+            baseT.SetPixels32(basePixels);
             baseT.Apply();
         }
 

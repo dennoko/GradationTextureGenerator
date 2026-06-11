@@ -161,26 +161,20 @@ namespace GradationBaker.Data
                     break;
             }
             mirroredCenter = origin + relativePos;
-            
+
             // Mirror rotation
-            Vector3 eulerAngles = BoxRotation.eulerAngles;
+            // オイラー角の符号反転では複合回転 (X/Y/Z 同時回転) で破綻するため、
+            // 鏡映行列 M による相似変換 R' = M·R·M で求める (det(R') = +1 で正規回転になる)
+            Matrix4x4 reflect = Matrix4x4.identity;
             switch (MirrorAxis)
             {
-                case Data.MirrorAxis.X:
-                    eulerAngles.y = -eulerAngles.y;
-                    eulerAngles.z = -eulerAngles.z;
-                    break;
-                case Data.MirrorAxis.Y:
-                    eulerAngles.x = -eulerAngles.x;
-                    eulerAngles.z = -eulerAngles.z;
-                    break;
-                case Data.MirrorAxis.Z:
-                    eulerAngles.x = -eulerAngles.x;
-                    eulerAngles.y = -eulerAngles.y;
-                    break;
+                case Data.MirrorAxis.X: reflect.m00 = -1f; break;
+                case Data.MirrorAxis.Y: reflect.m11 = -1f; break;
+                case Data.MirrorAxis.Z: reflect.m22 = -1f; break;
             }
-            mirroredRotation = Quaternion.Euler(eulerAngles);
-            
+            Matrix4x4 mirroredMatrix = reflect * Matrix4x4.Rotate(BoxRotation) * reflect;
+            mirroredRotation = mirroredMatrix.rotation;
+
             return (mirroredCenter, mirroredRotation);
         }
         

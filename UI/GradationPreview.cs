@@ -12,6 +12,30 @@ namespace GradationBaker.UI
         private Material _disabledMaterial;
         private Texture2D _lutTexture;
 
+        // SceneView イベント毎の再生成を避けるためのキャッシュ。
+        // MaterialPropertyBlock はネイティブ生成を伴うため、ScriptableObject の
+        // コンストラクタ経由 (EditorWindow のフィールドイニシャライザ) では生成できない。
+        // 初回使用時に遅延生成する。
+        private MaterialPropertyBlock _propertyBlock;
+        private readonly Color[] _lutPixels = new Color[LutWidth];
+        private int _lastGradientHash;
+        private const int LutWidth = 256;
+
+        // Shader.PropertyToID は文字列ルックアップより高速
+        private static readonly int PropMainTex           = Shader.PropertyToID("_MainTex");
+        private static readonly int PropWorldToBox        = Shader.PropertyToID("_WorldToBox");
+        private static readonly int PropBoxHeight         = Shader.PropertyToID("_BoxHeight");
+        private static readonly int PropShape             = Shader.PropertyToID("_Shape");
+        private static readonly int PropBlendMode         = Shader.PropertyToID("_BlendMode");
+        private static readonly int PropUseMirror         = Shader.PropertyToID("_UseMirror");
+        private static readonly int PropWorldToBoxMirror  = Shader.PropertyToID("_WorldToBoxMirror");
+        private static readonly int PropMirrorBlendMode   = Shader.PropertyToID("_MirrorBlendMode");
+        private static readonly int PropUVChannel         = Shader.PropertyToID("_UVChannel");
+        private static readonly int PropMaskTex           = Shader.PropertyToID("_MaskTex");
+        private static readonly int PropUseMaskTexture    = Shader.PropertyToID("_UseMaskTexture");
+        private static readonly int PropUseVertexColorMask = Shader.PropertyToID("_UseVertexColorMask");
+        private static readonly int PropInvertMask        = Shader.PropertyToID("_InvertMask");
+
         private class ProxyEntry
         {
             public GameObject ProxyObject;
@@ -26,7 +50,7 @@ namespace GradationBaker.UI
         {
             Renderer renderer = entry.ActiveRenderer;
             if (renderer == null) return;
-            
+
             // Lazy Init Material
             if (_previewMaterial == null)
             {
@@ -48,8 +72,8 @@ namespace GradationBaker.UI
 
             // Calculate Main Matrix
             Matrix4x4 boxMatrix = Matrix4x4.TRS(
-                settings.BoxCenter, 
-                settings.BoxRotation, 
+                settings.BoxCenter,
+                settings.BoxRotation,
                 settings.BoxScale
             );
             Matrix4x4 worldToBox = boxMatrix.inverse;
@@ -57,28 +81,28 @@ namespace GradationBaker.UI
             // Calculate Mirror Matrix
             bool isMirrorEnabled = settings.UseMirror && settings.MirrorAxis != MirrorAxis.None;
             Matrix4x4 worldToBoxMirror = Matrix4x4.identity;
-            
+
             if (isMirrorEnabled)
             {
                 var (mirrorCenter, mirrorRot) = settings.GetMirroredBox(renderer.transform);
                 Matrix4x4 mirrorBoxMatrix = Matrix4x4.TRS(
-                    mirrorCenter, 
-                    mirrorRot, 
+                    mirrorCenter,
+                    mirrorRot,
                     settings.BoxScale
                 );
                 worldToBoxMirror = mirrorBoxMatrix.inverse;
             }
 
             // Set global shader properties on Material
-            _previewMaterial.SetTexture("_MainTex", _lutTexture);
-            _previewMaterial.SetMatrix("_WorldToBox", worldToBox);
-            _previewMaterial.SetFloat("_BoxHeight", settings.BoxHeight);
-            _previewMaterial.SetInt("_Shape", (int)settings.Shape);
-            _previewMaterial.SetInt("_BlendMode", (int)settings.BlendMode);
-            
-            _previewMaterial.SetInt("_UseMirror", isMirrorEnabled ? 1 : 0);
-            _previewMaterial.SetMatrix("_WorldToBoxMirror", worldToBoxMirror);
-            _previewMaterial.SetInt("_MirrorBlendMode", (int)settings.MirrorBlend);
+            _previewMaterial.SetTexture(PropMainTex, _lutTexture);
+            _previewMaterial.SetMatrix(PropWorldToBox, worldToBox);
+            _previewMaterial.SetFloat(PropBoxHeight, settings.BoxHeight);
+            _previewMaterial.SetInt(PropShape, (int)settings.Shape);
+            _previewMaterial.SetInt(PropBlendMode, (int)settings.BlendMode);
+
+            _previewMaterial.SetInt(PropUseMirror, isMirrorEnabled ? 1 : 0);
+            _previewMaterial.SetMatrix(PropWorldToBoxMirror, worldToBoxMirror);
+            _previewMaterial.SetInt(PropMirrorBlendMode, (int)settings.MirrorBlend);
 
             // Fetch or create Proxy
             if (!_proxies.TryGetValue(renderer, out var proxy) || proxy.ProxyObject == null)
@@ -96,6 +120,12 @@ namespace GradationBaker.UI
                 proxy.ProxyObject.transform.localScale = renderer.transform.lossyScale;
             }
 
+            // SkinnedMesh はブレンドシェイプの値も元レンダラーに同期させる
+            if (proxy.SkinnedRenderer != null && renderer is SkinnedMeshRenderer sourceSmr)
+            {
+                SyncBlendShapes(sourceSmr, proxy.SkinnedRenderer);
+            }
+
             // Update proxy materials per slot (enabled → preview, disabled → transparent)
             int slotCount = Mathf.Max(1, renderer.sharedMaterials.Length);
             var proxyMats = new Material[slotCount];
@@ -103,19 +133,21 @@ namespace GradationBaker.UI
                 proxyMats[i] = entry.IsMaterialSlotEnabled(i) ? _previewMaterial : _disabledMaterial;
 
             // Use MaterialPropertyBlock for per-mesh settings
-            MaterialPropertyBlock block = new MaterialPropertyBlock();
-            block.SetInt("_UVChannel", entry.UVChannel);
+            if (_propertyBlock == null) _propertyBlock = new MaterialPropertyBlock();
+            MaterialPropertyBlock block = _propertyBlock;
+            block.Clear();
+            block.SetInt(PropUVChannel, entry.UVChannel);
             if (entry.MaskTexture != null)
             {
-                block.SetTexture("_MaskTex", entry.MaskTexture);
-                block.SetInt("_UseMaskTexture", 1);
+                block.SetTexture(PropMaskTex, entry.MaskTexture);
+                block.SetInt(PropUseMaskTexture, 1);
             }
             else
             {
-                block.SetInt("_UseMaskTexture", 0);
+                block.SetInt(PropUseMaskTexture, 0);
             }
-            block.SetInt("_UseVertexColorMask", entry.UseVertexColorMask ? 1 : 0);
-            block.SetInt("_InvertMask", entry.InvertMask ? 1 : 0);
+            block.SetInt(PropUseVertexColorMask, entry.UseVertexColorMask ? 1 : 0);
+            block.SetInt(PropInvertMask, entry.InvertMask ? 1 : 0);
 
             if (proxy.SkinnedRenderer != null)
             {
@@ -129,12 +161,26 @@ namespace GradationBaker.UI
             }
         }
 
+        private static void SyncBlendShapes(SkinnedMeshRenderer source, SkinnedMeshRenderer target)
+        {
+            Mesh mesh = source.sharedMesh;
+            if (mesh == null || target.sharedMesh != mesh) return;
+
+            int count = mesh.blendShapeCount;
+            for (int i = 0; i < count; i++)
+            {
+                float weight = source.GetBlendShapeWeight(i);
+                if (!Mathf.Approximately(target.GetBlendShapeWeight(i), weight))
+                    target.SetBlendShapeWeight(i, weight);
+            }
+        }
+
         private ProxyEntry CreateProxy(Renderer target)
         {
             GameObject go = new GameObject("GradationPreviewProxy_" + target.name);
             go.hideFlags = HideFlags.HideAndDontSave;
             // Raycast等の邪魔にならないよう Ignore Raycast(2) にする
-            go.layer = 2; 
+            go.layer = 2;
 
             var proxy = new ProxyEntry { ProxyObject = go };
 
@@ -155,6 +201,8 @@ namespace GradationBaker.UI
                 newSmr.sharedMaterials = smrMats;
                 newSmr.updateWhenOffscreen = true;
                 proxy.SkinnedRenderer = newSmr;
+
+                SyncBlendShapes(smr, newSmr);
             }
             else if (target is MeshRenderer mr)
             {
@@ -166,7 +214,7 @@ namespace GradationBaker.UI
                 proxy.MeshFilter = go.AddComponent<MeshFilter>();
                 var sourceMf = target.GetComponent<MeshFilter>();
                 if (sourceMf != null) proxy.MeshFilter.sharedMesh = sourceMf.sharedMesh;
-                
+
                 proxy.MeshRenderer = go.AddComponent<MeshRenderer>();
                 var mrMats = new Material[Mathf.Max(1, mr.sharedMaterials.Length)];
                 for (int i = 0; i < mrMats.Length; i++) mrMats[i] = _previewMaterial;
@@ -210,7 +258,7 @@ namespace GradationBaker.UI
                 UpdatePreview(settings, entry);
             }
         }
-        
+
         public void ClearProxies()
         {
             foreach (var proxy in _proxies.Values)
@@ -222,18 +270,46 @@ namespace GradationBaker.UI
 
         private void UpdateLUT(Gradient gradient)
         {
+            bool created = false;
             if (_lutTexture == null)
             {
-                _lutTexture = new Texture2D(256, 1, TextureFormat.ARGB32, false);
+                _lutTexture = new Texture2D(LutWidth, 1, TextureFormat.ARGB32, false);
                 _lutTexture.wrapMode = TextureWrapMode.Clamp;
                 _lutTexture.hideFlags = HideFlags.HideAndDontSave;
+                created = true;
             }
-            
-            for (int i = 0; i < 256; i++)
+
+            // グラデーションが変わっていなければ再生成しない
+            // (SceneView イベント毎に 256 回の Evaluate + GPU 転送が走るのを防ぐ)
+            int hash = ComputeGradientHash(gradient);
+            if (!created && hash == _lastGradientHash) return;
+            _lastGradientHash = hash;
+
+            for (int i = 0; i < LutWidth; i++)
             {
-                _lutTexture.SetPixel(i, 0, gradient.Evaluate((float)i / 255f));
+                _lutPixels[i] = gradient.Evaluate(i / (float)(LutWidth - 1));
             }
+            _lutTexture.SetPixels(_lutPixels);
             _lutTexture.Apply();
+        }
+
+        private static int ComputeGradientHash(Gradient gradient)
+        {
+            unchecked
+            {
+                int hash = (int)gradient.mode;
+                foreach (var key in gradient.colorKeys)
+                {
+                    hash = hash * 31 + key.color.GetHashCode();
+                    hash = hash * 31 + key.time.GetHashCode();
+                }
+                foreach (var key in gradient.alphaKeys)
+                {
+                    hash = hash * 31 + key.alpha.GetHashCode();
+                    hash = hash * 31 + key.time.GetHashCode();
+                }
+                return hash;
+            }
         }
 
         public void Cleanup()
