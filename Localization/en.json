@@ -80,5 +80,9 @@
     "blend_multiply": "Multiply",
     "dither_mode": "Dithering",
     "dither_none": "None",
-    "dither_intensity": "Dither Intensity"
+    "dither_intensity": "Dither Intensity",
+    "update_available": "Update Available {0}",
+    "cannot_check_version": "Cannot check version",
+    "checking_version": "Checking...",
+    "recheck_update": "Recheck Update"
 }

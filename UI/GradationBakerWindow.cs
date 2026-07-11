@@ -1,31 +1,86 @@
 using UnityEngine;
 using UnityEditor;
-using UnityEditorInternal;
+using UnityEngine.UIElements;
+using UnityEditor.UIElements;
 using GradationBaker.Data;
 using GradationBaker.Execute;
 using GradationBaker.Localization;
 using System.IO;
 using System.Collections.Generic;
+using GradationBaker;
 
 namespace GradationBaker.UI
 {
     public class GradationBakerWindow : EditorWindow
     {
+        private const string UXML_GUID = "c2e5daad2fc96f52b2ae755fbe5cd4c3";
+        private const string USS_GUID  = "b1d4c99c1fb85e41a198d64ead4bc3b2";
+
         [SerializeField]
         private GradationSettings _settings = new GradationSettings();
 
-        // ScriptableObject のコンストラクタ (フィールドイニシャライザ) では
-        // Unity API を呼べないため、生成は OnEnable で行う
         private GradationBakingExecutor _baker;
         private GradationSceneHandle _sceneHandle;
         private GradationPreview _preview;
-        private StatusBar _statusBar;
 
-        // ReorderableList for meshes
-        private ReorderableList _meshList;
+        // UI Toolkit Elements
+        private VisualElement _rootElement;
+        private Label _versionLabel;
+        private Button _versionReloadButton;
+        private Button _langButton;
+        private Toggle _enableToolToggle;
+        
+        private VisualElement _toolDisabledCard;
+        private VisualElement _mainContentContainer;
+        private VisualElement _meshListContainer;
+        private Button _createWorkMeshButton;
+        private Button _clearAllButton;
+        
+        private GradientField _gradientField;
+        private Button _saveGradientButton;
+        private Button _loadGradientButton;
+        
+        private DropdownField _shapeDropdown;
+        private Vector3Field _centerField;
+        private Button _centerResetButton;
+        private Vector3Field _rotationField;
+        private Button _rotationResetButton;
+        private FloatField _heightField;
+        private Vector3Field _sizeField;
+        private Label _centerLabel;
+        private Label _rotationLabel;
+        private Label _sizeLabel;
+        private VisualElement _sizeContainer;
+        
+        private Toggle _mirrorToggle;
+        private VisualElement _mirrorContent;
+        private DropdownField _mirrorAxisDropdown;
+        private DropdownField _mirrorBlendDropdown;
+        
+        private DropdownField _resolutionDropdown;
+        private Toggle _useTextureFolderToggle;
+        private VisualElement _savePathContainer;
+        private TextField _savePathField;
+        private Button _savePathBrowseButton;
+        private Label _outsideAssetsWarning;
+        private DropdownField _bgColorDropdown;
+        private SliderInt _edgePaddingSlider;
+        private Label _edgePaddingHelpLabel;
+        private DropdownField _ditherModeDropdown;
+        private Slider _ditherIntensitySlider;
+        
+        private DropdownField _blendModeDropdown;
+        private Label _ndmfPreviewSuspendedLabel;
+        
+        private Button _bakeButton;
+        private Label _statusLabel;
+        
+        private IVisualElementScheduledItem _statusResetSchedule;
 
-        // Scroll position
-        private Vector2 _scrollPosition;
+        private DennokoVersionChecker.Result _versionResult =
+            new DennokoVersionChecker.Result { State = DennokoVersionChecker.State.Checking, LocalVersion = "1.0.0" };
+
+        public enum StatusType { Info, Success, Error }
 
         [MenuItem("dennokoworks/Gradation Baker")]
         public static void ShowWindow()
@@ -37,17 +92,13 @@ namespace GradationBaker.UI
 
         private void OnEnable()
         {
-            // ドメインリロードやデシリアライズのタイミング次第で
-            // フィールドイニシャライザに頼れないケースがあるため明示的に再生成する
             if (_settings == null)    _settings    = new GradationSettings();
             if (_baker == null)       _baker       = new GradationBakingExecutor();
             if (_sceneHandle == null) _sceneHandle = new GradationSceneHandle();
             if (_preview == null)     _preview     = new GradationPreview();
-            if (_statusBar == null)   _statusBar   = new StatusBar();
 
             SceneView.duringSceneGui += OnSceneGUI;
             LocalizationManager.Initialize();
-            SetupMeshList();
         }
 
         private void OnDisable()
@@ -59,633 +110,791 @@ namespace GradationBaker.UI
             NdmfPreviewBridge.RestorePreview();
         }
 
-        private void SetupMeshList()
+        public void CreateGUI()
         {
-            _meshList = new ReorderableList(_settings.MeshEntries, typeof(MeshEntry), true, false, false, false);
+            _rootElement = rootVisualElement;
 
-            // Unity スキンのリスト背景 (ライトモードで明るくなる) を無効化してテーマ色で塗る
-            _meshList.showDefaultBackground = false;
-            _meshList.drawElementBackgroundCallback = (Rect rect, int index, bool isActive, bool isFocused) =>
+            _rootElement.AddToClassList("dennoko-root");
+            _rootElement.style.backgroundColor = new StyleColor(new Color32(0x12, 0x12, 0x12, 0xFF));
+            _rootElement.style.flexGrow = 1;
+
+            // Load USS
+            string ussPath = AssetDatabase.GUIDToAssetPath(USS_GUID);
+            var uss = string.IsNullOrEmpty(ussPath)
+                ? null
+                : AssetDatabase.LoadAssetAtPath<StyleSheet>(ussPath);
+            if (uss != null)
             {
-                if (Event.current.type != EventType.Repaint) return;
-                EditorGUI.DrawRect(rect, isActive ? GradationBakerTheme.Surface2 : GradationBakerTheme.Surface1);
+                _rootElement.styleSheets.Add(uss);
+            }
+            else
+            {
+                Debug.LogWarning($"[GradationBakerWindow] USS not found. GUID: {USS_GUID}");
+            }
+
+            // Load UXML
+            string uxmlPath = AssetDatabase.GUIDToAssetPath(UXML_GUID);
+            var uxml = string.IsNullOrEmpty(uxmlPath)
+                ? null
+                : AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(uxmlPath);
+            if (uxml == null)
+            {
+                _rootElement.Add(new Label("UXML Asset not found. Please check GUID."));
+                return;
+            }
+            uxml.CloneTree(_rootElement);
+
+            InitializeUIElements(_rootElement);
+            BindUIEvents();
+            UpdateLocalization();
+            UpdateUIStates();
+            StartVersionCheck();
+        }
+
+        private void InitializeUIElements(VisualElement root)
+        {
+            _versionLabel = root.Q<Label>("version-label");
+            _versionReloadButton = root.Q<Button>("version-reload-button");
+            _langButton = root.Q<Button>("lang-button");
+            _enableToolToggle = root.Q<Toggle>("enable-tool-toggle");
+            
+            _toolDisabledCard = root.Q<VisualElement>("tool-disabled-card");
+            _mainContentContainer = root.Q<VisualElement>("main-content-container");
+            _meshListContainer = root.Q<VisualElement>("mesh-list-container");
+            _createWorkMeshButton = root.Q<Button>("create-work-mesh-button");
+            _clearAllButton = root.Q<Button>("clear-all-button");
+            
+            _gradientField = root.Q<GradientField>("gradient-field");
+            _saveGradientButton = root.Q<Button>("save-gradient-button");
+            _loadGradientButton = root.Q<Button>("load-gradient-button");
+            
+            _shapeDropdown = root.Q<DropdownField>("shape-dropdown");
+            _centerField = root.Q<Vector3Field>("center-field");
+            _centerResetButton = root.Q<Button>("center-reset-button");
+            _rotationField = root.Q<Vector3Field>("rotation-field");
+            _rotationResetButton = root.Q<Button>("rotation-reset-button");
+            _heightField = root.Q<FloatField>("height-field");
+            _sizeField = root.Q<Vector3Field>("size-field");
+            _centerLabel = root.Q<Label>("center-label");
+            _rotationLabel = root.Q<Label>("rotation-label");
+            _sizeLabel = root.Q<Label>("size-label");
+            _sizeContainer = root.Q<VisualElement>("size-container");
+            
+            _mirrorToggle = root.Q<Toggle>("mirror-toggle");
+            _mirrorContent = root.Q<VisualElement>("mirror-content");
+            _mirrorAxisDropdown = root.Q<DropdownField>("mirror-axis-dropdown");
+            _mirrorBlendDropdown = root.Q<DropdownField>("mirror-blend-dropdown");
+            
+            _resolutionDropdown = root.Q<DropdownField>("resolution-dropdown");
+            _useTextureFolderToggle = root.Q<Toggle>("use-texture-folder-toggle");
+            _savePathContainer = root.Q<VisualElement>("save-path-container");
+            _savePathField = root.Q<TextField>("save-path-field");
+            _savePathBrowseButton = root.Q<Button>("save-path-browse-button");
+            _outsideAssetsWarning = root.Q<Label>("outside-assets-warning");
+            _bgColorDropdown = root.Q<DropdownField>("bg-color-dropdown");
+            _edgePaddingSlider = root.Q<SliderInt>("edge-padding-slider");
+            _edgePaddingHelpLabel = root.Q<Label>("edge-padding-help-label");
+            _ditherModeDropdown = root.Q<DropdownField>("dither-mode-dropdown");
+            _ditherIntensitySlider = root.Q<Slider>("dither-intensity-slider");
+            
+            _blendModeDropdown = root.Q<DropdownField>("blend-mode-dropdown");
+            _ndmfPreviewSuspendedLabel = root.Q<Label>("ndmf-preview-suspended-label");
+            
+            _bakeButton = root.Q<Button>("bake-button");
+            _statusLabel = root.Q<Label>("status-label");
+
+            // Setup Dropdown Choices
+            _shapeDropdown.choices = new List<string> { L("shape_linear"), L("shape_spherical") };
+            _mirrorAxisDropdown.choices = new List<string> { "X", "Y", "Z" };
+            _mirrorBlendDropdown.choices = new List<string> { L("mirror_blend_max"), L("mirror_blend_min") };
+            _resolutionDropdown.choices = new List<string> { "128", "256", "512", "1024", "2048", "4096" };
+            _bgColorDropdown.choices = new List<string> { L("bg_transparent"), L("bg_white"), L("bg_black") };
+            _ditherModeDropdown.choices = new List<string> { L("dither_none"), "Interleaved Gradient Noise (IGN)", "Triangular Noise (TPDF)" };
+            _blendModeDropdown.choices = new List<string> { L("blend_replace"), L("blend_additive"), L("blend_screen"), L("blend_multiply") };
+
+            // Setup Drag and Drop
+            SetupDragAndDrop(root.Q<VisualElement>("drop-area"));
+        }
+
+        private void BindUIEvents()
+        {
+            // Tool Toggle
+            _enableToolToggle.value = _settings.IsToolActive;
+            _enableToolToggle.RegisterValueChangedCallback(evt => {
+                _settings.IsToolActive = evt.newValue;
+                UpdateUIStates();
+                SceneView.RepaintAll();
+            });
+
+            // Language Switch
+            _langButton.clicked += () => {
+                var nextLang = LocalizationManager.CurrentLanguage == LocalizationManager.Language.Japanese
+                    ? LocalizationManager.Language.English
+                    : LocalizationManager.Language.Japanese;
+                LocalizationManager.SetLanguage(nextLang);
+                
+                // Re-initialize choices with new locale
+                _shapeDropdown.choices = new List<string> { L("shape_linear"), L("shape_spherical") };
+                _mirrorBlendDropdown.choices = new List<string> { L("mirror_blend_max"), L("mirror_blend_min") };
+                _bgColorDropdown.choices = new List<string> { L("bg_transparent"), L("bg_white"), L("bg_black") };
+                _ditherModeDropdown.choices = new List<string> { L("dither_none"), "Interleaved Gradient Noise (IGN)", "Triangular Noise (TPDF)" };
+                _blendModeDropdown.choices = new List<string> { L("blend_replace"), L("blend_additive"), L("blend_screen"), L("blend_multiply") };
+
+                UpdateLocalization();
+                UpdateUIStates();
             };
 
-            _meshList.drawElementCallback = (Rect rect, int index, bool isActive, bool isFocused) =>
+            // Version Reload
+            if (_versionReloadButton != null)
             {
-                if (index >= _settings.MeshEntries.Count) return;
-                var entry = _settings.MeshEntries[index];
+                _versionReloadButton.clicked += () => {
+                    GradationBakerVersion.ForceRecheck();
+                    LoadVersionResultFromSessionState();
+                };
+            }
 
-                float removeWidth = 24f;
-                float spacing = 4f;
-                float statusWidth = 50f;
-                float lineHeight = EditorGUIUtility.singleLineHeight;
+            // Buttons
+            _createWorkMeshButton.clicked += () => {
+                ToggleAllWorkMeshes();
+                UpdateUIStates();
+            };
+            _clearAllButton.clicked += () => {
+                ClearAllMeshes();
+                UpdateUIStates();
+            };
+            _saveGradientButton.clicked += SaveGradientAsTexture;
+            _loadGradientButton.clicked += () => {
+                LoadGradientFromTexture();
+                _gradientField.value = _settings.Gradient;
+            };
 
-                // --- First Line: Renderer Field ---
-                Rect headerRect = new Rect(rect.x, rect.y + 2, rect.width, lineHeight);
+            // Gradient Field
+            _gradientField.value = _settings.Gradient;
+            _gradientField.RegisterValueChangedCallback(evt => {
+                _settings.Gradient = evt.newValue;
+                SceneView.RepaintAll();
+            });
 
-                float fieldWidth = rect.width - removeWidth - statusWidth - spacing * 3 - 20;
-                Rect foldoutRect = new Rect(rect.x, headerRect.y, 20, lineHeight);
-                Rect fieldRect = new Rect(rect.x + 20, headerRect.y, fieldWidth, lineHeight);
+            // Box Control
+            _shapeDropdown.index = (int)_settings.Shape;
+            _shapeDropdown.RegisterValueChangedCallback(evt => {
+                _settings.Shape = (GradationShape)_shapeDropdown.index;
+                UpdateUIStates();
+                SceneView.RepaintAll();
+            });
 
-                entry.ShowDetails = EditorGUI.Foldout(foldoutRect, entry.ShowDetails, "");
+            _centerField.value = _settings.BoxCenter;
+            _centerField.RegisterValueChangedCallback(evt => {
+                _settings.BoxCenter = evt.newValue;
+                SceneView.RepaintAll();
+            });
+            _centerResetButton.clicked += () => {
+                _settings.FitToAllMeshBounds();
+                _centerField.value = _settings.BoxCenter;
+                SceneView.RepaintAll();
+            };
 
-                EditorGUI.BeginChangeCheck();
-                entry.SourceRenderer = (Renderer)EditorGUI.ObjectField(fieldRect, entry.SourceRenderer, typeof(Renderer), true);
-                if (EditorGUI.EndChangeCheck() && entry.SourceRenderer != null)
+            _rotationField.value = _settings.BoxRotation.eulerAngles;
+            _rotationField.RegisterValueChangedCallback(evt => {
+                _settings.BoxRotation = Quaternion.Euler(evt.newValue);
+                SceneView.RepaintAll();
+            });
+            _rotationResetButton.clicked += () => {
+                _settings.BoxRotation = Quaternion.identity;
+                _rotationField.value = Vector3.zero;
+                SceneView.RepaintAll();
+            };
+
+            _heightField.value = _settings.BoxHeight;
+            _heightField.RegisterValueChangedCallback(evt => {
+                _settings.BoxHeight = Mathf.Max(0.001f, evt.newValue);
+                SceneView.RepaintAll();
+            });
+
+            _sizeField.value = _settings.BoxScale;
+            _sizeField.RegisterValueChangedCallback(evt => {
+                _settings.BoxWidth = Mathf.Max(0.001f, evt.newValue.x);
+                _settings.BoxHeight = Mathf.Max(0.001f, evt.newValue.y);
+                _settings.BoxDepth = Mathf.Max(0.001f, evt.newValue.z);
+                SceneView.RepaintAll();
+            });
+
+            // Mirror
+            _mirrorToggle.value = _settings.UseMirror;
+            _mirrorToggle.RegisterValueChangedCallback(evt => {
+                _settings.UseMirror = evt.newValue;
+                UpdateUIStates();
+                SceneView.RepaintAll();
+            });
+
+            if (_settings.MirrorAxis == MirrorAxis.None)
+                _settings.MirrorAxis = MirrorAxis.X;
+            _mirrorAxisDropdown.index = (int)_settings.MirrorAxis - 1;
+            _mirrorAxisDropdown.RegisterValueChangedCallback(evt => {
+                _settings.MirrorAxis = (MirrorAxis)(_mirrorAxisDropdown.index + 1);
+                SceneView.RepaintAll();
+            });
+
+            _mirrorBlendDropdown.index = (int)_settings.MirrorBlend;
+            _mirrorBlendDropdown.RegisterValueChangedCallback(evt => {
+                _settings.MirrorBlend = (MirrorBlendMode)_mirrorBlendDropdown.index;
+                SceneView.RepaintAll();
+            });
+
+            // Output
+            int[] resValues = { 128, 256, 512, 1024, 2048, 4096 };
+            int currentResIndex = System.Array.IndexOf(resValues, _settings.Resolution);
+            _resolutionDropdown.index = currentResIndex >= 0 ? currentResIndex : 4;
+            _resolutionDropdown.RegisterValueChangedCallback(evt => {
+                _settings.Resolution = resValues[_resolutionDropdown.index];
+            });
+
+            _useTextureFolderToggle.value = _settings.UseTextureFolder;
+            _useTextureFolderToggle.RegisterValueChangedCallback(evt => {
+                _settings.UseTextureFolder = evt.newValue;
+                UpdateUIStates();
+            });
+
+            _savePathField.value = _settings.SavePath;
+            _savePathField.RegisterValueChangedCallback(evt => {
+                _settings.SavePath = evt.newValue;
+                UpdateUIStates();
+            });
+            _savePathBrowseButton.clicked += () => {
+                string path = EditorUtility.OpenFolderPanel("Select Save Folder", "Assets", "");
+                if (!string.IsNullOrEmpty(path))
+                {
+                    if (path.StartsWith(Application.dataPath))
+                        _settings.SavePath = "Assets" + path.Substring(Application.dataPath.Length);
+                    else
+                        _settings.SavePath = path;
+                    _savePathField.value = _settings.SavePath;
+                }
+            };
+
+            _bgColorDropdown.index = (int)_settings.BgColor;
+            _bgColorDropdown.RegisterValueChangedCallback(evt => {
+                _settings.BgColor = (BackgroundColor)_bgColorDropdown.index;
+            });
+
+            _edgePaddingSlider.value = _settings.EdgePaddingPixels;
+            _edgePaddingSlider.RegisterValueChangedCallback(evt => {
+                _settings.EdgePaddingPixels = evt.newValue;
+                UpdateUIStates();
+            });
+
+            _ditherModeDropdown.index = (int)_settings.DitherMode;
+            _ditherModeDropdown.RegisterValueChangedCallback(evt => {
+                _settings.DitherMode = (DitherAlgorithm)_ditherModeDropdown.index;
+                UpdateUIStates();
+                SceneView.RepaintAll();
+            });
+
+            _ditherIntensitySlider.value = _settings.DitherIntensity;
+            _ditherIntensitySlider.RegisterValueChangedCallback(evt => {
+                _settings.DitherIntensity = evt.newValue;
+                SceneView.RepaintAll();
+            });
+
+            // Preview
+            _blendModeDropdown.index = (int)_settings.BlendMode;
+            _blendModeDropdown.RegisterValueChangedCallback(evt => {
+                _settings.BlendMode = (PreviewBlendMode)_blendModeDropdown.index;
+                SceneView.RepaintAll();
+            });
+
+            // Bake Button
+            _bakeButton.clicked += BakeAndSave;
+        }
+
+        private void UpdateLocalization()
+        {
+            _langButton.text = LocalizationManager.CurrentLanguage == LocalizationManager.Language.Japanese ? "EN" : "JA";
+            _enableToolToggle.text = L("enable_tool");
+            _toolDisabledCard.Q<Label>("tool-disabled-label").text = L("tool_disabled");
+
+            _rootElement.Q<Label>("section-target-meshes-label").text = L("section_target_meshes");
+            _rootElement.Q<Label>("mesh-help-label").text = L("mesh_help");
+            _rootElement.Q<Label>("drop-meshes-here-label").text = L("drop_meshes_here");
+            _clearAllButton.text = L("clear_all");
+
+            _rootElement.Q<Label>("section-gradient-label").text = L("section_gradient");
+            _gradientField.label = L("colors");
+            _saveGradientButton.text = L("save_gradient");
+            _loadGradientButton.text = L("load_gradient");
+
+            _rootElement.Q<Label>("section-box-control-label").text = L("section_box_control");
+            _rootElement.Q<Label>("box-help-label").text = L("box_help");
+            _shapeDropdown.label = L("shape");
+            
+            _centerLabel.text = L("center");
+            _rotationLabel.text = L("rotation");
+            _centerField.label = "";
+            _rotationField.label = "";
+            
+            _heightField.label = L("height");
+            
+            _sizeLabel.text = L("size");
+            _sizeField.label = "";
+
+            _mirrorToggle.text = L("mirror");
+            _mirrorAxisDropdown.label = L("mirror_axis");
+            _mirrorBlendDropdown.label = L("mirror_blend");
+            _rootElement.Q<Label>("mirror-help-label").text = L("mirror_help");
+
+            _rootElement.Q<Label>("section-output-label").text = L("section_output");
+            _resolutionDropdown.label = L("resolution");
+            _useTextureFolderToggle.text = L("use_texture_folder");
+            _savePathField.label = L("save_path");
+            _bgColorDropdown.label = L("bg_color");
+            _edgePaddingSlider.label = L("edge_padding");
+            _edgePaddingHelpLabel.text = L("edge_padding_help");
+            _ditherModeDropdown.label = L("dither_mode");
+            _ditherIntensitySlider.label = L("dither_intensity");
+
+            _rootElement.Q<Label>("section-preview-label").text = L("section_preview");
+            _blendModeDropdown.label = L("blend_mode");
+            _ndmfPreviewSuspendedLabel.text = L("ndmf_preview_suspended");
+
+            _bakeButton.text = L("bake_and_save");
+
+            if (_versionReloadButton != null)
+                _versionReloadButton.tooltip = L("recheck_update");
+
+            ApplyVersionLabel();
+            UpdateMeshList();
+        }
+
+        private void UpdateUIStates()
+        {
+            if (!_settings.IsToolActive)
+            {
+                _toolDisabledCard.style.display = DisplayStyle.Flex;
+                _mainContentContainer.style.display = DisplayStyle.None;
+                _bakeButton.SetEnabled(false);
+                return;
+            }
+
+            _toolDisabledCard.style.display = DisplayStyle.None;
+            _mainContentContainer.style.display = DisplayStyle.Flex;
+            _bakeButton.SetEnabled(_settings.MeshEntries.Count > 0 && _settings.GetPrimaryRenderer() != null);
+
+            // Work mesh button state
+            bool hasAnyWorkMesh = HasAnyWorkMesh();
+            _createWorkMeshButton.text = hasAnyWorkMesh ? L("delete_work_mesh") : L("create_work_mesh");
+
+            // Box control shapes
+            if (_settings.Shape == GradationShape.Linear)
+            {
+                _heightField.style.display = DisplayStyle.Flex;
+                _sizeContainer.style.display = DisplayStyle.None;
+            }
+            else
+            {
+                _heightField.style.display = DisplayStyle.None;
+                _sizeContainer.style.display = DisplayStyle.Flex;
+            }
+
+            // Mirror Section Content Display
+            _mirrorContent.style.display = _settings.UseMirror ? DisplayStyle.Flex : DisplayStyle.None;
+
+            // Output Folder and Path
+            _savePathContainer.style.display = _settings.UseTextureFolder ? DisplayStyle.None : DisplayStyle.Flex;
+
+            // Outside assets warning
+            bool outsideAssets = !string.IsNullOrEmpty(_settings.SavePath) &&
+                                 !_settings.SavePath.Replace('\\', '/').StartsWith("Assets");
+            _outsideAssetsWarning.style.display = (outsideAssets && !_settings.UseTextureFolder) ? DisplayStyle.Flex : DisplayStyle.None;
+            _outsideAssetsWarning.text = L("save_path_outside_assets");
+
+            // Edge padding help
+            _edgePaddingHelpLabel.style.display = _settings.EdgePaddingPixels > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+
+            // Dither settings
+            _ditherIntensitySlider.style.display = _settings.DitherMode != DitherAlgorithm.None ? DisplayStyle.Flex : DisplayStyle.None;
+
+            // NDMF Status
+            _ndmfPreviewSuspendedLabel.style.display = NdmfPreviewBridge.IsSuppressing ? DisplayStyle.Flex : DisplayStyle.None;
+
+            // Dynamic fields updates
+            _centerField.value = _settings.BoxCenter;
+            _rotationField.value = _settings.BoxRotation.eulerAngles;
+            _heightField.value = _settings.BoxHeight;
+            _sizeField.value = _settings.BoxScale;
+        }
+
+        private void SetupDragAndDrop(VisualElement dropArea)
+        {
+            if (dropArea == null) return;
+
+            dropArea.RegisterCallback<DragEnterEvent>(evt => {
+                if (IsValidDragObject())
+                {
+                    dropArea.style.backgroundColor = new StyleColor(new Color32(0x3a, 0x3a, 0x3a, 0xFF));
+                    DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
+                }
+            });
+
+            dropArea.RegisterCallback<DragLeaveEvent>(evt => {
+                dropArea.style.backgroundColor = new StyleColor(new Color32(0x2c, 0x2c, 0x2c, 0xFF));
+            });
+
+            dropArea.RegisterCallback<DragUpdatedEvent>(evt => {
+                if (IsValidDragObject())
+                {
+                    DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
+                }
+            });
+
+            dropArea.RegisterCallback<DragPerformEvent>(evt => {
+                dropArea.style.backgroundColor = new StyleColor(new Color32(0x2c, 0x2c, 0x2c, 0xFF));
+                if (IsValidDragObject())
+                {
+                    DragAndDrop.AcceptDrag();
+                    bool isFirstMesh = _settings.MeshEntries.Count == 0;
+
+                    foreach (var obj in DragAndDrop.objectReferences)
+                    {
+                        Renderer renderer = null;
+
+                        if (obj is GameObject go)
+                            renderer = go.GetComponent<Renderer>();
+                        else if (obj is Renderer r)
+                            renderer = r;
+
+                        if (renderer != null)
+                        {
+                            GameObject original = NdmfPreviewBridge.ResolveOriginal(renderer.gameObject);
+                            if (original != renderer.gameObject)
+                                renderer = original.GetComponent<Renderer>();
+                        }
+
+                        if (renderer != null)
+                        {
+                            bool alreadyExists = false;
+                            foreach (var entry in _settings.MeshEntries)
+                            {
+                                if (entry.SourceRenderer == renderer)
+                                {
+                                    alreadyExists = true;
+                                    break;
+                                }
+                            }
+
+                            if (!alreadyExists)
+                                _settings.MeshEntries.Add(new MeshEntry { SourceRenderer = renderer });
+                        }
+                    }
+
+                    if (isFirstMesh && _settings.MeshEntries.Count > 0)
+                        InitializeBoxFromRenderer(_settings.MeshEntries[0].SourceRenderer);
+
+                    UpdateMeshList();
+                    UpdateUIStates();
+                    SceneView.RepaintAll();
+                }
+            });
+        }
+
+        private bool IsValidDragObject()
+        {
+            foreach (var obj in DragAndDrop.objectReferences)
+            {
+                if (obj is GameObject go && go.GetComponent<Renderer>() != null)
+                    return true;
+                if (obj is Renderer)
+                    return true;
+            }
+            return false;
+        }
+
+        private void UpdateMeshList()
+        {
+            if (_meshListContainer == null) return;
+            _meshListContainer.Clear();
+
+            for (int i = 0; i < _settings.MeshEntries.Count; i++)
+            {
+                var entry = _settings.MeshEntries[i];
+                var element = CreateMeshEntryElement(entry, i);
+                _meshListContainer.Add(element);
+            }
+        }
+
+        private VisualElement CreateMeshEntryElement(MeshEntry entry, int index)
+        {
+            var item = new VisualElement();
+            item.AddToClassList("dennoko-mesh-item");
+            if (entry.HasWorkMesh)
+            {
+                item.AddToClassList("dennoko-mesh-item--active");
+            }
+
+            // Header line
+            var header = new VisualElement();
+            header.style.flexDirection = FlexDirection.Row;
+            header.style.alignItems = Align.Center;
+
+            var foldout = new Foldout();
+            foldout.text = "";
+            foldout.value = entry.ShowDetails;
+            foldout.RegisterValueChangedCallback(evt => {
+                entry.ShowDetails = evt.newValue;
+                UpdateMeshList();
+            });
+            header.Add(foldout);
+
+            var objectField = new ObjectField();
+            objectField.objectType = typeof(Renderer);
+            objectField.value = entry.SourceRenderer;
+            objectField.allowSceneObjects = true;
+            objectField.style.flexGrow = 1;
+            objectField.RegisterValueChangedCallback(evt => {
+                var renderer = evt.newValue as Renderer;
+                entry.SourceRenderer = renderer;
+                if (renderer != null)
                 {
                     if (_settings.MeshEntries.Count == 1 && index == 0)
                     {
-                        InitializeBoxFromRenderer(entry.SourceRenderer);
+                        InitializeBoxFromRenderer(renderer);
                     }
                     entry.UVChannel = _settings.UVChannel;
                     entry.MaskTexture = _settings.MaskTexture;
                     entry.UseVertexColorMask = _settings.UseVertexColorMask;
                     entry.InvertMask = _settings.InvertMask;
-                    entry.SyncMaterialSlots(entry.SourceRenderer);
+                    entry.SyncMaterialSlots(renderer);
                 }
+                UpdateMeshList();
+                UpdateUIStates();
+                SceneView.RepaintAll();
+            });
+            header.Add(objectField);
 
-                // Work mesh status label
-                Rect statusRect = new Rect(rect.x + 20 + fieldWidth + spacing, headerRect.y, statusWidth, lineHeight);
-                if (entry.HasWorkMesh)
-                {
-                    GUI.Label(statusRect, "[" + L("work") + "]", GradationBakerTheme.CaptionStyle);
-                }
-
-                // Remove button
-                Rect removeRect = new Rect(rect.x + rect.width - removeWidth, headerRect.y, removeWidth, lineHeight);
-                if (GUI.Button(removeRect, "×", GradationBakerTheme.MiniButtonStyle))
-                {
-                    RemoveMeshEntry(index);
-                }
-
-                // --- Detailed Settings (if expanded) ---
-                if (entry.ShowDetails)
-                {
-                    EditorGUI.BeginChangeCheck();
-
-                    float y = rect.y + lineHeight + 6;
-                    float indent = 20f;
-                    float labelW = 80f;
-                    float contentW = rect.width - indent - labelW - 10;
-
-                    GUIStyle labelStyle = GradationBakerTheme.MiniLabelStyle;
-
-                    // UV Channel
-                    Rect uvLabelRect = new Rect(rect.x + indent, y, labelW, lineHeight);
-                    Rect uvFieldRect = new Rect(rect.x + indent + labelW, y, contentW, lineHeight);
-                    GUI.Label(uvLabelRect, L("uv_channel"), labelStyle);
-                    string[] uvOptions = { "UV0", "UV1", "UV2", "UV3" };
-                    entry.UVChannel = EditorGUI.Popup(uvFieldRect, entry.UVChannel, uvOptions);
-
-                    y += lineHeight + 2;
-
-                    // Mask Texture
-                    Rect maskLabelRect = new Rect(rect.x + indent, y, labelW, lineHeight);
-                    Rect maskFieldRect = new Rect(rect.x + indent + labelW, y, contentW, lineHeight);
-                    GUI.Label(maskLabelRect, L("mask_texture"), labelStyle);
-                    entry.MaskTexture = (Texture2D)EditorGUI.ObjectField(maskFieldRect, entry.MaskTexture, typeof(Texture2D), false);
-
-                    y += lineHeight + 2;
-
-                    // Mask Options
-                    Rect optRect1 = new Rect(rect.x + indent + labelW, y, 120, lineHeight);
-                    Rect optRect2 = new Rect(rect.x + indent + labelW + 120, y, 100, lineHeight);
-                    entry.UseVertexColorMask = EditorGUI.ToggleLeft(optRect1, L("use_vertex_color"), entry.UseVertexColorMask);
-                    entry.InvertMask = EditorGUI.ToggleLeft(optRect2, L("invert_mask"), entry.InvertMask);
-
-                    y += lineHeight + 2;
-
-                    // Split by Material Option
-                    Rect splitRect = new Rect(rect.x + indent + labelW, y, 200, lineHeight);
-                    entry.SplitByMaterial = EditorGUI.ToggleLeft(splitRect, L("split_by_material"), entry.SplitByMaterial);
-
-                    y += lineHeight + 2;
-
-                    // Per-material slot enable/disable toggles
-                    Renderer activeRenderer = entry.ActiveRenderer;
-                    if (activeRenderer != null)
-                    {
-                        entry.SyncMaterialSlots(activeRenderer);
-                        Material[] mats = activeRenderer.sharedMaterials;
-                        if (mats.Length > 0)
-                        {
-                            Rect slotHeaderRect = new Rect(rect.x + indent, y, labelW, lineHeight);
-                            GUI.Label(slotHeaderRect, L("material_slots"), labelStyle);
-                            y += lineHeight + 2;
-
-                            for (int mi = 0; mi < mats.Length; mi++)
-                            {
-                                string matName = (mats[mi] != null) ? mats[mi].name : $"Slot {mi}";
-                                Rect toggleRect = new Rect(rect.x + indent + labelW, y, contentW, lineHeight);
-                                entry.EnabledMaterialSlots[mi] = EditorGUI.ToggleLeft(toggleRect, matName, entry.EnabledMaterialSlots[mi]);
-                                y += lineHeight + 2;
-                            }
-                        }
-                    }
-
-                    if (EditorGUI.EndChangeCheck())
-                    {
-                        SceneView.RepaintAll();
-                    }
-                }
-            };
-
-            _meshList.elementHeightCallback = (int index) =>
+            if (entry.HasWorkMesh)
             {
-                if (index >= _settings.MeshEntries.Count) return EditorGUIUtility.singleLineHeight + 6;
-                var entry = _settings.MeshEntries[index];
-                if (entry.ShowDetails)
-                {
-                    int matCount = entry.ActiveRenderer != null ? entry.ActiveRenderer.sharedMaterials.Length : 0;
-                    // base 5 lines + header line + one line per slot (when renderer is set)
-                    int extraLines = matCount > 0 ? 1 + matCount : 0;
-                    return (EditorGUIUtility.singleLineHeight + 2) * (5 + extraLines) + 10;
-                }
-                return EditorGUIUtility.singleLineHeight + 6;
-            };
-        }
-
-        // ─── OnGUI ───────────────────────────────────────────────────────────
-
-        private void OnGUI()
-        {
-            GradationBakerTheme.Initialize();
-            // ライト/ダークどちらの Editor テーマでも見た目を変えないよう
-            // EditorStyles をテーマ色で一時上書きする (finally で必ず復元)
-            GradationBakerTheme.PushEditorTheme();
-            try
-            {
-                DrawWindowContents();
-            }
-            finally
-            {
-                GradationBakerTheme.PopEditorTheme();
-            }
-        }
-
-        private void DrawWindowContents()
-        {
-            // ウィンドウ全面に surface.level0 を塗る
-            EditorGUI.DrawRect(new Rect(0, 0, position.width, position.height), GradationBakerTheme.Surface0);
-
-            DrawHeader();
-
-            if (!_settings.IsToolActive)
-            {
-                GUILayout.BeginVertical(GradationBakerTheme.CardStyle);
-                GUILayout.Label(L("tool_disabled"), GradationBakerTheme.SecondaryTextStyle);
-                GUILayout.EndVertical();
-                _statusBar.Draw();
-                if (_statusBar.NeedsRepaint()) Repaint();
-                return;
+                var statusLabel = new Label("[" + L("work") + "]");
+                statusLabel.AddToClassList("dennoko-text-tertiary");
+                statusLabel.style.marginLeft = 4;
+                statusLabel.style.marginRight = 4;
+                header.Add(statusLabel);
             }
 
-            _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
+            var removeBtn = new Button(() => {
+                RemoveMeshEntry(index);
+                UpdateUIStates();
+            });
+            removeBtn.text = "×";
+            removeBtn.AddToClassList("dennoko-button-mini");
+            header.Add(removeBtn);
 
-            DrawMeshSection();
-            DrawGradientSection();
+            item.Add(header);
 
-            // メッシュがない場合はヘルプを表示して早期リターン
-            if (_settings.MeshEntries.Count == 0 || _settings.GetPrimaryRenderer() == null)
+            // Detailed Settings
+            if (entry.ShowDetails)
             {
-                DrawSection(L("help_title"), () =>
-                {
-                    GUILayout.Label(L("help_usage"), GradationBakerTheme.SecondaryTextStyle);
-                    EditorGUILayout.Space(4);
-                    GUILayout.Label(L("help_warning"), GradationBakerTheme.CaptionStyle);
+                var details = new VisualElement();
+                details.AddToClassList("dennoko-indent");
+                details.style.marginTop = 4;
+
+                // UV Channel
+                var uvRow = new VisualElement();
+                uvRow.AddToClassList("dennoko-horizontal");
+                uvRow.AddToClassList("dennoko-field-row");
+                var uvLabel = new Label(L("uv_channel"));
+                uvLabel.style.width = 80;
+                uvRow.Add(uvLabel);
+                var uvDropdown = new DropdownField();
+                uvDropdown.choices = new List<string> { "UV0", "UV1", "UV2", "UV3" };
+                uvDropdown.index = entry.UVChannel;
+                uvDropdown.style.flexGrow = 1;
+                uvDropdown.RegisterValueChangedCallback(evt => {
+                    entry.UVChannel = uvDropdown.index;
+                    SceneView.RepaintAll();
                 });
+                uvRow.Add(uvDropdown);
+                details.Add(uvRow);
 
-                EditorGUILayout.EndScrollView();
-                _statusBar.Draw();
-                if (_statusBar.NeedsRepaint()) Repaint();
-                return;
-            }
-
-            DrawBoxControlSection();
-            DrawMirrorSection();
-            DrawOutputSection();
-            DrawPreviewSection();
-
-            EditorGUILayout.Space(4);
-            EditorGUILayout.EndScrollView();
-
-            // フッター: Bake ボタン
-            GUILayout.BeginVertical(GradationBakerTheme.CardStyle);
-            if (GUILayout.Button(L("bake_and_save"), GradationBakerTheme.ActionButtonStyle))
-            {
-                BakeAndSave();
-            }
-            GUILayout.EndVertical();
-
-            _statusBar.Draw();
-            if (_statusBar.NeedsRepaint()) Repaint();
-        }
-
-        // ─── Header ──────────────────────────────────────────────────────────
-
-        private void DrawHeader()
-        {
-            EditorGUILayout.Space(6);
-            GUILayout.BeginHorizontal();
-            GUILayout.Space(8);
-            GUILayout.Label("Gradation Baker", GradationBakerTheme.TitleStyle);
-            GUILayout.FlexibleSpace();
-            EditorGUI.BeginChangeCheck();
-            _settings.IsToolActive = EditorGUILayout.ToggleLeft(
-                L("enable_tool"), _settings.IsToolActive,
-                GradationBakerTheme.SecondaryTextStyle, GUILayout.Width(120));
-            // 無効化時にプレビュープロキシの除去と NDMF プレビュー再開を即時反映する
-            if (EditorGUI.EndChangeCheck()) SceneView.RepaintAll();
-            if (LocalizationManager.DrawLanguageSelector()) Repaint();
-            GUILayout.Space(6);
-            GUILayout.EndHorizontal();
-            EditorGUILayout.Space(6);
-            DrawSeparator();
-        }
-
-        // ─── Sections ────────────────────────────────────────────────────────
-
-        private void DrawMeshSection()
-        {
-            DrawSection(L("section_target_meshes"), () =>
-            {
-                GUILayout.Label(L("mesh_help"), GradationBakerTheme.CaptionStyle);
-                EditorGUILayout.Space(2);
-
-                // Drag & Drop エリア
-                Rect dropArea = GUILayoutUtility.GetRect(0, 44, GUILayout.ExpandWidth(true), GUILayout.MinWidth(100));
-                EditorGUI.DrawRect(dropArea, GradationBakerTheme.Surface2);
-
-                // ドロップエリア枠線
-                var borderColor = GradationBakerTheme.Outline;
-                EditorGUI.DrawRect(new Rect(dropArea.x, dropArea.y, dropArea.width, 1), borderColor);
-                EditorGUI.DrawRect(new Rect(dropArea.x, dropArea.yMax - 1, dropArea.width, 1), borderColor);
-                EditorGUI.DrawRect(new Rect(dropArea.x, dropArea.y, 1, dropArea.height), borderColor);
-                EditorGUI.DrawRect(new Rect(dropArea.xMax - 1, dropArea.y, 1, dropArea.height), borderColor);
-
-                GUI.Label(dropArea, L("drop_meshes_here"), GradationBakerTheme.DropAreaLabelStyle);
-                HandleDragAndDrop(dropArea);
-
-                if (_settings.MeshEntries.Count > 0)
-                {
-                    EditorGUILayout.Space(4);
-                    _meshList.DoLayoutList();
-
-                    EditorGUILayout.Space(2);
-                    EditorGUILayout.BeginHorizontal();
-                    bool hasAnyWorkMesh = HasAnyWorkMesh();
-                    if (GUILayout.Button(
-                        hasAnyWorkMesh ? L("delete_work_mesh") : L("create_work_mesh"),
-                        GradationBakerTheme.SecondaryButtonStyle))
-                    {
-                        ToggleAllWorkMeshes();
-                    }
-                    if (GUILayout.Button(L("clear_all"), GradationBakerTheme.SecondaryButtonStyle))
-                    {
-                        ClearAllMeshes();
-                    }
-                    EditorGUILayout.EndHorizontal();
-                }
-            });
-        }
-
-        private void DrawGradientSection()
-        {
-            DrawSection(L("section_gradient"), () =>
-            {
-                EditorGUI.BeginChangeCheck();
-                _settings.Gradient = EditorGUILayout.GradientField(L("colors"), _settings.Gradient);
-                if (EditorGUI.EndChangeCheck()) SceneView.RepaintAll();
-
-                EditorGUILayout.Space(4);
-                EditorGUILayout.BeginHorizontal();
-                if (GUILayout.Button(L("save_gradient"), GradationBakerTheme.SecondaryButtonStyle))
-                    SaveGradientAsTexture();
-                if (GUILayout.Button(L("load_gradient"), GradationBakerTheme.SecondaryButtonStyle))
-                    LoadGradientFromTexture();
-                EditorGUILayout.EndHorizontal();
-            });
-        }
-
-        private void DrawBoxControlSection()
-        {
-            DrawSection(L("section_box_control"), () =>
-            {
-                GUILayout.Label(L("box_help"), GradationBakerTheme.CaptionStyle);
-                EditorGUILayout.Space(4);
-
-                EditorGUI.BeginChangeCheck();
-
-                string[] shapeOptions = { L("shape_linear"), L("shape_spherical") };
-                _settings.Shape = (GradationShape)EditorGUILayout.Popup(L("shape"), (int)_settings.Shape, shapeOptions);
-                EditorGUILayout.Space(2);
-
-                EditorGUILayout.BeginHorizontal();
-                Vector3 center = EditorGUILayout.Vector3Field(L("center"), _settings.BoxCenter);
-                bool centerResetClicked = GUILayout.Button(L("reset"), GradationBakerTheme.MiniButtonStyle, GUILayout.Width(50));
-                if (centerResetClicked)
-                {
-                    _settings.FitToAllMeshBounds();
+                // Mask Texture
+                var maskRow = new VisualElement();
+                maskRow.AddToClassList("dennoko-horizontal");
+                maskRow.AddToClassList("dennoko-field-row");
+                var maskLabel = new Label(L("mask_texture"));
+                maskLabel.style.width = 80;
+                maskRow.Add(maskLabel);
+                var maskField = new ObjectField();
+                maskField.objectType = typeof(Texture2D);
+                maskField.value = entry.MaskTexture;
+                maskField.allowSceneObjects = false;
+                maskField.style.flexGrow = 1;
+                maskField.RegisterValueChangedCallback(evt => {
+                    entry.MaskTexture = maskField.value as Texture2D;
                     SceneView.RepaintAll();
-                    GUI.FocusControl(null);
-                }
-                EditorGUILayout.EndHorizontal();
+                });
+                maskRow.Add(maskField);
+                details.Add(maskRow);
 
-                EditorGUILayout.BeginHorizontal();
-                Vector3 euler = _settings.BoxRotation.eulerAngles;
-                euler = EditorGUILayout.Vector3Field(L("rotation"), euler);
-                bool resetClicked = GUILayout.Button(L("reset"), GradationBakerTheme.MiniButtonStyle, GUILayout.Width(50));
-                if (resetClicked)
-                {
-                    _settings.BoxRotation = Quaternion.identity;
+                // Mask Options
+                var optRow = new VisualElement();
+                optRow.AddToClassList("dennoko-horizontal");
+                optRow.AddToClassList("dennoko-field-row");
+                optRow.style.marginLeft = 80;
+                var useVertexToggle = new Toggle(L("use_vertex_color"));
+                useVertexToggle.value = entry.UseVertexColorMask;
+                useVertexToggle.RegisterValueChangedCallback(evt => {
+                    entry.UseVertexColorMask = evt.newValue;
                     SceneView.RepaintAll();
-                    GUI.FocusControl(null);
-                }
-                EditorGUILayout.EndHorizontal();
+                });
+                optRow.Add(useVertexToggle);
 
-                float height = _settings.BoxHeight;
-                Vector3 size = _settings.BoxScale;
-
-                if (_settings.Shape == GradationShape.Linear)
-                    height = EditorGUILayout.FloatField(L("height"), _settings.BoxHeight);
-                else
-                    size = EditorGUILayout.Vector3Field(L("size"), _settings.BoxScale);
-
-                if (EditorGUI.EndChangeCheck())
-                {
-                    if (!resetClicked && !centerResetClicked)
-                    {
-                        // 入力中に丸めると "0.005" のような値が打てなくなるため、丸めずそのまま反映する
-                        _settings.BoxCenter = center;
-                        _settings.BoxRotation = Quaternion.Euler(euler);
-
-                        if (_settings.Shape == GradationShape.Linear)
-                        {
-                            _settings.BoxHeight = Mathf.Max(0.001f, height);
-                        }
-                        else
-                        {
-                            _settings.BoxWidth  = Mathf.Max(0.001f, size.x);
-                            _settings.BoxHeight = Mathf.Max(0.001f, size.y);
-                            _settings.BoxDepth  = Mathf.Max(0.001f, size.z);
-                        }
-                    }
+                var invertMaskToggle = new Toggle(L("invert_mask"));
+                invertMaskToggle.value = entry.InvertMask;
+                invertMaskToggle.RegisterValueChangedCallback(evt => {
+                    entry.InvertMask = evt.newValue;
                     SceneView.RepaintAll();
-                }
-            });
-        }
+                });
+                optRow.Add(invertMaskToggle);
+                details.Add(optRow);
 
-        private void DrawMirrorSection()
-        {
-            DrawSection(L("section_mirror"), () =>
-            {
-                EditorGUI.BeginChangeCheck();
-                _settings.UseMirror = EditorGUILayout.Toggle(L("mirror"), _settings.UseMirror);
+                // Split by Material
+                var splitRow = new VisualElement();
+                splitRow.AddToClassList("dennoko-horizontal");
+                splitRow.AddToClassList("dennoko-field-row");
+                splitRow.style.marginLeft = 80;
+                var splitToggle = new Toggle(L("split_by_material"));
+                splitToggle.value = entry.SplitByMaterial;
+                splitToggle.RegisterValueChangedCallback(evt => {
+                    entry.SplitByMaterial = evt.newValue;
+                    UpdateMeshList();
+                    SceneView.RepaintAll();
+                });
+                splitRow.Add(splitToggle);
+                details.Add(splitRow);
 
-                if (_settings.UseMirror)
+                // Material slots
+                Renderer activeRenderer = entry.ActiveRenderer;
+                if (activeRenderer != null)
                 {
-                    // 「なし」は UseMirror トグルと重複するためドロップダウンには出さない
-                    if (_settings.MirrorAxis == MirrorAxis.None)
-                        _settings.MirrorAxis = MirrorAxis.X;
-
-                    string[] axisOptions = { "X", "Y", "Z" };
-                    int axisIndex = (int)_settings.MirrorAxis - 1;
-                    axisIndex = EditorGUILayout.Popup(L("mirror_axis"), axisIndex, axisOptions);
-                    _settings.MirrorAxis = (MirrorAxis)(axisIndex + 1);
-
-                    string[] blendOptions = { L("mirror_blend_max"), L("mirror_blend_min") };
-                    _settings.MirrorBlend = (MirrorBlendMode)EditorGUILayout.Popup(
-                        L("mirror_blend"), (int)_settings.MirrorBlend, blendOptions);
-
-                    EditorGUILayout.Space(2);
-                    GUILayout.Label(L("mirror_help"), GradationBakerTheme.CaptionStyle);
-                }
-
-                if (EditorGUI.EndChangeCheck()) SceneView.RepaintAll();
-            });
-        }
-
-        private void DrawOutputSection()
-        {
-            DrawSection(L("section_output"), () =>
-            {
-                float originalLabelWidth = EditorGUIUtility.labelWidth;
-                EditorGUIUtility.labelWidth = EditorGUIUtility.currentViewWidth * 0.55f;
-
-                string[] resOptions = { "128", "256", "512", "1024", "2048", "4096" };
-                int[] resValues = { 128, 256, 512, 1024, 2048, 4096 };
-                int currentResIndex = System.Array.IndexOf(resValues, _settings.Resolution);
-                if (currentResIndex < 0) currentResIndex = 4;
-                int newResIndex = EditorGUILayout.Popup(L("resolution"), currentResIndex, resOptions);
-                _settings.Resolution = resValues[newResIndex];
-
-                _settings.UseTextureFolder = EditorGUILayout.Toggle(L("use_texture_folder"), _settings.UseTextureFolder);
-
-                if (!_settings.UseTextureFolder)
-                {
-                    EditorGUILayout.BeginHorizontal();
-                    _settings.SavePath = EditorGUILayout.TextField(L("save_path"), _settings.SavePath);
-                    if (GUILayout.Button("...", GUILayout.Width(30)))
+                    entry.SyncMaterialSlots(activeRenderer);
+                    Material[] mats = activeRenderer.sharedMaterials;
+                    if (mats.Length > 0)
                     {
-                        string path = EditorUtility.OpenFolderPanel("Select Save Folder", "Assets", "");
-                        if (!string.IsNullOrEmpty(path))
+                        var slotHeaderRow = new VisualElement();
+                        slotHeaderRow.AddToClassList("dennoko-horizontal");
+                        slotHeaderRow.AddToClassList("dennoko-field-row");
+                        var slotLabel = new Label(L("material_slots"));
+                        slotLabel.style.width = 80;
+                        slotHeaderRow.Add(slotLabel);
+                        details.Add(slotHeaderRow);
+
+                        for (int mi = 0; mi < mats.Length; mi++)
                         {
-                            if (path.StartsWith(Application.dataPath))
-                                _settings.SavePath = "Assets" + path.Substring(Application.dataPath.Length);
-                            else
-                                _settings.SavePath = path;
+                            int slotIndex = mi;
+                            string matName = (mats[mi] != null) ? mats[mi].name : $"Slot {mi}";
+                            var toggleRow = new VisualElement();
+                            toggleRow.AddToClassList("dennoko-horizontal");
+                            toggleRow.AddToClassList("dennoko-field-row");
+                            toggleRow.style.marginLeft = 80;
+
+                            var slotToggle = new Toggle(matName);
+                            slotToggle.value = entry.EnabledMaterialSlots[slotIndex];
+                            slotToggle.RegisterValueChangedCallback(evt => {
+                                entry.EnabledMaterialSlots[slotIndex] = evt.newValue;
+                                SceneView.RepaintAll();
+                            });
+                            toggleRow.Add(slotToggle);
+                            details.Add(toggleRow);
                         }
                     }
-                    EditorGUILayout.EndHorizontal();
-
-                    // Assets 外のフォルダは PNG 保存はできるがインポート設定の自動調整が効かない
-                    if (!string.IsNullOrEmpty(_settings.SavePath) &&
-                        !_settings.SavePath.Replace('\\', '/').StartsWith("Assets"))
-                    {
-                        GUILayout.Label(L("save_path_outside_assets"), GradationBakerTheme.CaptionStyle);
-                    }
                 }
 
-                string[] bgOptions = { L("bg_transparent"), L("bg_white"), L("bg_black") };
-                _settings.BgColor = (BackgroundColor)EditorGUILayout.Popup(
-                    L("bg_color"), (int)_settings.BgColor, bgOptions);
-
-                _settings.EdgePaddingPixels = EditorGUILayout.IntSlider(
-                    L("edge_padding"), _settings.EdgePaddingPixels, 0, 16);
-                if (_settings.EdgePaddingPixels > 0)
-                {
-                    EditorGUILayout.Space(2);
-                    GUILayout.Label(L("edge_padding_help"), GradationBakerTheme.CaptionStyle);
-                }
-
-                EditorGUILayout.Space(4);
-                EditorGUI.BeginChangeCheck();
-                string[] ditherOptions = { L("dither_none"), "Interleaved Gradient Noise (IGN)", "Triangular Noise (TPDF)" };
-                _settings.DitherMode = (DitherAlgorithm)EditorGUILayout.Popup(L("dither_mode"), (int)_settings.DitherMode, ditherOptions);
-                if (_settings.DitherMode != DitherAlgorithm.None)
-                {
-                    _settings.DitherIntensity = EditorGUILayout.Slider(L("dither_intensity"), _settings.DitherIntensity, 0.0f, 2.0f);
-                }
-                if (EditorGUI.EndChangeCheck())
-                {
-                    SceneView.RepaintAll();
-                }
-
-                EditorGUIUtility.labelWidth = originalLabelWidth;
-            });
-        }
-
-        private void DrawPreviewSection()
-        {
-            DrawSection(L("section_preview"), () =>
-            {
-                EditorGUILayout.BeginHorizontal();
-                GUILayout.Label(L("blend_mode"), GradationBakerTheme.SecondaryTextStyle, GUILayout.Width(60));
-                EditorGUI.BeginChangeCheck();
-                string[] blendModeOptions = { L("blend_replace"), L("blend_additive"), L("blend_screen"), L("blend_multiply") };
-                _settings.BlendMode = (PreviewBlendMode)EditorGUILayout.Popup((int)_settings.BlendMode, blendModeOptions);
-                if (EditorGUI.EndChangeCheck()) SceneView.RepaintAll();
-                EditorGUILayout.EndHorizontal();
-
-                if (NdmfPreviewBridge.IsSuppressing)
-                {
-                    EditorGUILayout.Space(2);
-                    GUILayout.Label(L("ndmf_preview_suspended"), GradationBakerTheme.CaptionStyle);
-                }
-            });
-        }
-
-        // ─── Section Helpers ─────────────────────────────────────────────────
-
-        private void DrawSection(string title, System.Action content)
-        {
-            GUILayout.BeginVertical(GradationBakerTheme.CardStyle);
-            GUILayout.Label(title, GradationBakerTheme.SectionHeaderStyle);
-            DrawSeparator();
-            content?.Invoke();
-            GUILayout.EndVertical();
-        }
-
-        private void DrawToggleSection(string title, ref bool toggle, System.Action content, System.Action onReset = null)
-        {
-            GUILayout.BeginVertical(GradationBakerTheme.CardStyle);
-
-            GUILayout.BeginHorizontal();
-            var headerStyle = toggle ? GradationBakerTheme.ToggleSectionOnStyle : GradationBakerTheme.ToggleSectionOffStyle;
-            EditorGUI.BeginChangeCheck();
-            bool newToggle = EditorGUILayout.ToggleLeft(title, toggle, headerStyle, GUILayout.ExpandWidth(true));
-            if (EditorGUI.EndChangeCheck())
-            {
-                toggle = newToggle;
-                Repaint();
-            }
-            if (onReset != null && GUILayout.Button("Reset", GradationBakerTheme.MiniButtonStyle, GUILayout.Width(50)))
-            {
-                onReset.Invoke();
-                GUI.FocusControl(null);
-            }
-            GUILayout.EndHorizontal();
-
-            DrawSeparator();
-
-            using (new EditorGUI.DisabledGroupScope(!toggle))
-            {
-                content?.Invoke();
+                item.Add(details);
             }
 
-            GUILayout.EndVertical();
+            return item;
         }
 
-        private void DrawSeparator()
+        // ─── Version checking ─────────────────────────────────────────────
+
+        private void StartVersionCheck()
         {
-            var rect = GUILayoutUtility.GetRect(0, 1, GUILayout.ExpandWidth(true));
-            EditorGUI.DrawRect(rect, GradationBakerTheme.Outline);
-            EditorGUILayout.Space(4);
+            LoadVersionResultFromSessionState();
+            GradationBakerVersion.StartCheckBackgroundTask();
         }
 
-        // ─── Drag & Drop ─────────────────────────────────────────────────────
-
-        private void HandleDragAndDrop(Rect dropArea)
+        internal void LoadVersionResultFromSessionState()
         {
-            Event evt = Event.current;
+            string local  = GradationBakerVersion.Current;
+            string latest = SessionState.GetString(GradationBakerVersion.VerCheckLatestKey, string.Empty);
+            bool   done   = SessionState.GetBool(GradationBakerVersion.VerCheckDoneKey, false);
+            bool   error  = SessionState.GetBool(GradationBakerVersion.VerCheckErrorKey, false);
 
-            switch (evt.type)
+            DennokoVersionChecker.State state;
+            if (!done)
+                state = DennokoVersionChecker.State.Checking;
+            else if (error || string.IsNullOrEmpty(latest))
+                state = DennokoVersionChecker.State.Error;
+            else if (DennokoVersionChecker.IsUpdateAvailable(latest, local))
+                state = DennokoVersionChecker.State.UpdateAvailable;
+            else
+                state = DennokoVersionChecker.State.UpToDate;
+
+            _versionResult = new DennokoVersionChecker.Result
             {
-                case EventType.DragUpdated:
-                case EventType.DragPerform:
-                    if (!dropArea.Contains(evt.mousePosition))
-                        return;
+                State = state,
+                LocalVersion = local,
+                LatestVersion = latest,
+                Url = SessionState.GetString(GradationBakerVersion.VerCheckUrlKey, string.Empty),
+                Message = SessionState.GetString(GradationBakerVersion.VerCheckMessageKey, string.Empty)
+            };
+            ApplyVersionLabel();
+        }
 
-                    bool hasValidObject = false;
-                    foreach (var obj in DragAndDrop.objectReferences)
-                    {
-                        if (obj is GameObject go && (go.GetComponent<Renderer>() != null))
-                        {
-                            hasValidObject = true;
-                            break;
-                        }
-                        if (obj is Renderer)
-                        {
-                            hasValidObject = true;
-                            break;
-                        }
-                    }
+        private void ApplyVersionLabel()
+        {
+            if (_versionLabel == null) return;
 
-                    if (!hasValidObject)
-                        return;
-
-                    DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
-
-                    if (evt.type == EventType.DragPerform)
-                    {
-                        DragAndDrop.AcceptDrag();
-
-                        bool isFirstMesh = _settings.MeshEntries.Count == 0;
-
-                        foreach (var obj in DragAndDrop.objectReferences)
-                        {
-                            Renderer renderer = null;
-
-                            if (obj is GameObject go)
-                                renderer = go.GetComponent<Renderer>();
-                            else if (obj is Renderer r)
-                                renderer = r;
-
-                            // NDMF プレビューのプロキシが渡された場合は元のレンダラーに解決する
-                            if (renderer != null)
-                            {
-                                GameObject original = NdmfPreviewBridge.ResolveOriginal(renderer.gameObject);
-                                if (original != renderer.gameObject)
-                                    renderer = original.GetComponent<Renderer>();
-                            }
-
-                            if (renderer != null)
-                            {
-                                bool alreadyExists = false;
-                                foreach (var entry in _settings.MeshEntries)
-                                {
-                                    if (entry.SourceRenderer == renderer)
-                                    {
-                                        alreadyExists = true;
-                                        break;
-                                    }
-                                }
-
-                                if (!alreadyExists)
-                                    _settings.MeshEntries.Add(new MeshEntry { SourceRenderer = renderer });
-                            }
-                        }
-
-                        if (isFirstMesh && _settings.MeshEntries.Count > 0)
-                            InitializeBoxFromRenderer(_settings.MeshEntries[0].SourceRenderer);
-
-                        SetupMeshList();
-                        SceneView.RepaintAll();
-                    }
-
-                    evt.Use();
+            var r = _versionResult;
+            string baseText = "v" + r.LocalVersion;
+            string text;
+            bool update = false, error = false;
+            switch (r.State)
+            {
+                case DennokoVersionChecker.State.UpdateAvailable:
+                    text = baseText + "  " + L("update_available", r.LatestVersion);
+                    update = true;
                     break;
+                case DennokoVersionChecker.State.Error:
+                    text = baseText + "  " + L("cannot_check_version");
+                    error = true;
+                    break;
+                case DennokoVersionChecker.State.Checking:
+                    text = baseText + "  " + L("checking_version");
+                    break;
+                default:
+                    text = baseText;
+                    break;
+            }
+            _versionLabel.text = text;
+            _versionLabel.EnableInClassList("dennoko-version-label--update", update);
+            _versionLabel.EnableInClassList("dennoko-version-label--error", error);
+        }
+
+        // ─── Status bar ──────────────────────────────────────────────────
+
+        public void SetStatus(string message, StatusType type, long autoResetMs = 3000)
+        {
+            if (_statusLabel == null) return;
+
+            _statusLabel.text = message;
+            _statusLabel.EnableInClassList("dennoko-status--success", type == StatusType.Success);
+            _statusLabel.EnableInClassList("dennoko-status--error",   type == StatusType.Error);
+
+            _statusResetSchedule?.Pause();
+            if (type != StatusType.Info)
+            {
+                _statusResetSchedule = _statusLabel.schedule
+                    .Execute(() => SetStatus("Ready", StatusType.Info))
+                    .StartingIn(autoResetMs);
             }
         }
 
@@ -693,7 +902,6 @@ namespace GradationBaker.UI
 
         private void OnSceneGUI(SceneView sceneView)
         {
-            // リコンパイル直後などにフィールドが未初期化のまま呼ばれることがある
             if (_settings == null || _preview == null || _sceneHandle == null) return;
 
             if (!_settings.IsToolActive || _settings.MeshEntries.Count == 0)
@@ -703,10 +911,7 @@ namespace GradationBaker.UI
                 return;
             }
 
-            // 本ツールのプレビュー表示中は NDMF プレビューを一時停止し、
-            // ベイク対象 (元メッシュ) とシーン上の見た目を一致させる
             NdmfPreviewBridge.SuppressPreview();
-
             _preview.UpdatePreviewAll(_settings);
 
             HandleChangeType changeType = _sceneHandle.DrawHandle(_settings, this);
@@ -715,7 +920,9 @@ namespace GradationBaker.UI
                 _sceneHandle.DrawMirrorHandle(_settings);
 
             if (changeType != HandleChangeType.None)
-                Repaint();
+            {
+                UpdateUIStates();
+            }
         }
 
         // ─── Bake ────────────────────────────────────────────────────────────
@@ -763,7 +970,7 @@ namespace GradationBaker.UI
             if (savedCount > 0)
             {
                 string message = L("status_bake_success", savedCount);
-                _statusBar.Show(message, StatusBar.StatusType.Success);
+                SetStatus(message, StatusType.Success);
 
                 if (savedPaths.Count > 0 && TryGetAssetPath(savedPaths[0], out string firstAssetPath))
                 {
@@ -777,7 +984,7 @@ namespace GradationBaker.UI
             }
             else
             {
-                _statusBar.Show(L("status_bake_error"), StatusBar.StatusType.Error, 0);
+                SetStatus(L("status_bake_error"), StatusType.Error, 0);
             }
         }
 
@@ -879,20 +1086,6 @@ namespace GradationBaker.UI
             SceneView.RepaintAll();
         }
 
-        private void ToggleWorkMesh(MeshEntry entry)
-        {
-            if (entry.HasWorkMesh)
-            {
-                WorkMeshManager.DeleteWorkMesh(entry.WorkMeshObject);
-                entry.WorkMeshObject = null;
-            }
-            else if (entry.SourceRenderer != null)
-            {
-                entry.WorkMeshObject = WorkMeshManager.CreateWorkMesh(entry.SourceRenderer);
-            }
-            SceneView.RepaintAll();
-        }
-
         private void RemoveMeshEntry(int index)
         {
             if (index < 0 || index >= _settings.MeshEntries.Count) return;
@@ -902,7 +1095,7 @@ namespace GradationBaker.UI
                 WorkMeshManager.DeleteWorkMesh(entry.WorkMeshObject);
 
             _settings.MeshEntries.RemoveAt(index);
-            SetupMeshList();
+            UpdateMeshList();
             SceneView.RepaintAll();
         }
 
@@ -910,7 +1103,7 @@ namespace GradationBaker.UI
         {
             CleanupAllWorkMeshes();
             _settings.MeshEntries.Clear();
-            SetupMeshList();
+            UpdateMeshList();
             SceneView.RepaintAll();
         }
 
@@ -984,7 +1177,7 @@ namespace GradationBaker.UI
             }
 
             FileLogger.Log($"[GradationBakerWindow] Gradient saved to: {fullPath}");
-            _statusBar.Show(L("status_gradient_saved"), StatusBar.StatusType.Success);
+            SetStatus(L("status_gradient_saved"), StatusType.Success);
         }
 
         private string GenerateUniqueGradientFilename(string folderPath)
@@ -1026,7 +1219,6 @@ namespace GradationBaker.UI
 
             Texture2D tex = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
             bool ownsTex = false;
-            // Read/Write 無効のアセットは GetPixel できないため、PNG を直接読み込む
             if (tex == null || !tex.isReadable)
             {
                 string fullPath = tex != null ? OutputPathResolver.ToFullPath(path) : path;
@@ -1069,10 +1261,6 @@ namespace GradationBaker.UI
 
         // ─── Utilities ───────────────────────────────────────────────────────
 
-        /// <summary>
-        /// フルパスを Assets/ 相対のアセットパスに変換する。
-        /// プロジェクト外 (Assets 配下でない) 場合は false を返す。
-        /// </summary>
         private static bool TryGetAssetPath(string fullPath, out string assetPath)
         {
             string normalized = fullPath.Replace('\\', '/');

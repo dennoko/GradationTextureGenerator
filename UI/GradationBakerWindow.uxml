@@ -1,0 +1,137 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+    <ui:VisualElement name="root" class="dennoko-root">
+        <!-- ヘッダー -->
+        <ui:VisualElement class="dennoko-header">
+            <ui:VisualElement class="dennoko-header-titlegroup">
+                <ui:Label text="Gradation Baker" class="dennoko-title" />
+                <ui:Label name="version-label" text="v1.0.0" class="dennoko-version-label" />
+                <ui:Button name="version-reload-button" text="↻" class="dennoko-version-reload-button" />
+            </ui:VisualElement>
+            <ui:VisualElement class="dennoko-horizontal">
+                <ui:Toggle name="enable-tool-toggle" label="" value="true" />
+                <ui:Button name="lang-button" text="EN" class="dennoko-lang-button" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement class="dennoko-separator" />
+
+        <!-- メイン設定エリア (スクロール可能) -->
+        <ui:ScrollView style="flex-grow: 1;" show-horizontal-scroller="false">
+            <!-- ツール無効時の警告カード -->
+            <ui:VisualElement name="tool-disabled-card" class="dennoko-card" style="display: none;">
+                <ui:Label name="tool-disabled-label" text="Tool is disabled." class="dennoko-text-disabled" />
+            </ui:VisualElement>
+
+            <!-- メイン設定コンテンツ -->
+            <ui:VisualElement name="main-content-container">
+                <!-- 対象メッシュ -->
+                <ui:VisualElement class="dennoko-card">
+                    <ui:Label name="section-target-meshes-label" text="TARGET MESHES" class="dennoko-section-title dennoko-card-header" />
+                    <ui:Label name="mesh-help-label" text="Drag &amp; Drop meshes to setup." class="dennoko-text-tertiary" style="margin-bottom: 6px; white-space: normal;" />
+                    
+                    <!-- Drag & Drop Area -->
+                    <ui:VisualElement name="drop-area" class="dennoko-drop-area">
+                        <ui:Label name="drop-meshes-here-label" text="Drop meshes here" class="dennoko-drop-area-label" />
+                    </ui:VisualElement>
+
+                    <!-- 動的メッシュリスト用のコンテナ -->
+                    <ui:VisualElement name="mesh-list-container" />
+
+                    <!-- 操作ボタン -->
+                    <ui:VisualElement class="dennoko-horizontal" style="margin-top: 6px; justify-content: flex-end;">
+                        <ui:Button name="create-work-mesh-button" text="Create Work Mesh" class="dennoko-button-secondary" style="flex-grow: 1;" />
+                        <ui:Button name="clear-all-button" text="Clear All" class="dennoko-button-secondary" style="flex-grow: 1;" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- グラデーション -->
+                <ui:VisualElement class="dennoko-card">
+                    <ui:Label name="section-gradient-label" text="GRADIENT" class="dennoko-section-title dennoko-card-header" />
+                    <uie:GradientField name="gradient-field" label="Colors" class="dennoko-field-row" />
+                    <ui:VisualElement class="dennoko-horizontal" style="margin-top: 6px;">
+                        <ui:Button name="save-gradient-button" text="Save" class="dennoko-button-secondary" style="flex-grow: 1;" />
+                        <ui:Button name="load-gradient-button" text="Load" class="dennoko-button-secondary" style="flex-grow: 1;" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- ボックス制御 -->
+                <ui:VisualElement class="dennoko-card">
+                    <ui:Label name="section-box-control-label" text="BOX CONTROL" class="dennoko-section-title dennoko-card-header" />
+                    <ui:Label name="box-help-label" text="Box help text." class="dennoko-text-tertiary" style="margin-bottom: 6px; white-space: normal;" />
+                    
+                    <ui:DropdownField name="shape-dropdown" label="Shape" class="dennoko-field-row" />
+                    
+                    <ui:VisualElement class="dennoko-field-row">
+                        <ui:VisualElement class="dennoko-horizontal" style="justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                            <ui:Label name="center-label" text="Center" class="dennoko-text-secondary" />
+                            <ui:Button name="center-reset-button" text="Reset" class="dennoko-button-mini" />
+                        </ui:VisualElement>
+                        <uie:Vector3Field name="center-field" label="" />
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="dennoko-field-row">
+                        <ui:VisualElement class="dennoko-horizontal" style="justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                            <ui:Label name="rotation-label" text="Rotation" class="dennoko-text-secondary" />
+                            <ui:Button name="rotation-reset-button" text="Reset" class="dennoko-button-mini" />
+                        </ui:VisualElement>
+                        <uie:Vector3Field name="rotation-field" label="" />
+                    </ui:VisualElement>
+
+                    <ui:FloatField name="height-field" label="Height" class="dennoko-field-row" />
+
+                    <ui:VisualElement name="size-container" class="dennoko-field-row">
+                        <ui:Label name="size-label" text="Size" class="dennoko-text-secondary" style="margin-bottom: 2px;" />
+                        <uie:Vector3Field name="size-field" label="" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- ミラー -->
+                <ui:VisualElement class="dennoko-card">
+                    <ui:VisualElement class="dennoko-card-header dennoko-toggle-header">
+                        <ui:Toggle name="mirror-toggle" text="MIRROR" class="dennoko-section-title" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="mirror-content" class="dennoko-indent">
+                        <ui:DropdownField name="mirror-axis-dropdown" label="Mirror Axis" class="dennoko-field-row" />
+                        <ui:DropdownField name="mirror-blend-dropdown" label="Overlap Blend" class="dennoko-field-row" />
+                        <ui:Label name="mirror-help-label" text="Mirror help text." class="dennoko-text-tertiary" style="white-space: normal;" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- 出力設定 -->
+                <ui:VisualElement class="dennoko-card">
+                    <ui:Label name="section-output-label" text="OUTPUT" class="dennoko-section-title dennoko-card-header" />
+                    <ui:DropdownField name="resolution-dropdown" label="Resolution" class="dennoko-field-row" />
+                    <ui:Toggle name="use-texture-folder-toggle" text="Output to material's folder" class="dennoko-field-row" />
+                    
+                    <ui:VisualElement name="save-path-container" class="dennoko-horizontal dennoko-field-row">
+                        <ui:TextField name="save-path-field" label="Save Path" style="flex-grow: 1; margin-right: 4px;" />
+                        <ui:Button name="save-path-browse-button" text="..." class="dennoko-button-mini" style="width: 30px;" />
+                    </ui:VisualElement>
+                    <ui:Label name="outside-assets-warning" text="Warning" class="dennoko-text-warning" style="display: none; margin-bottom: 4px; white-space: normal;" />
+
+                    <ui:DropdownField name="bg-color-dropdown" label="Background" class="dennoko-field-row" />
+                    
+                    <ui:SliderInt name="edge-padding-slider" label="Edge Padding" low-value="0" high-value="16" show-input-field="true" class="dennoko-field-row" />
+                    <ui:Label name="edge-padding-help-label" text="Edge padding help." class="dennoko-text-tertiary" style="display: none; margin-bottom: 4px; white-space: normal;" />
+
+                    <ui:DropdownField name="dither-mode-dropdown" label="Dithering" class="dennoko-field-row" />
+                    <ui:Slider name="dither-intensity-slider" label="Dither Intensity" low-value="0.0" high-value="2.0" show-input-field="true" class="dennoko-field-row" />
+                </ui:VisualElement>
+
+                <!-- プレビュー -->
+                <ui:VisualElement class="dennoko-card">
+                    <ui:Label name="section-preview-label" text="PREVIEW" class="dennoko-section-title dennoko-card-header" />
+                    <ui:DropdownField name="blend-mode-dropdown" label="Blend Mode" class="dennoko-field-row" />
+                    <ui:Label name="ndmf-preview-suspended-label" text="NDMF suspended." class="dennoko-text-tertiary" style="display: none; white-space: normal;" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:ScrollView>
+
+        <!-- フッター (ベイクボタン) -->
+        <ui:VisualElement class="dennoko-card" style="margin-top: 4px; margin-bottom: 4px;">
+            <ui:Button name="bake-button" text="Bake &amp; Save" class="dennoko-button-primary" />
+        </ui:VisualElement>
+
+        <!-- ステータスバー -->
+        <ui:Label name="status-label" text="Ready" class="dennoko-status" />
+    </ui:VisualElement>
+</ui:UXML>
