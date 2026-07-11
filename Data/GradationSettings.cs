@@ -3,6 +3,13 @@ using System.Collections.Generic;
 
 namespace GradationBaker.Data
 {
+    public enum DitherAlgorithm
+    {
+        None = 0,
+        InterleavedGradientNoise = 1,
+        TriangularNoise = 2
+    }
+
     public enum MirrorAxis
     {
         None = 0,
@@ -133,6 +140,10 @@ namespace GradationBaker.Data
         
         // Edge Padding (UV island dilation)
         public int EdgePaddingPixels = 4; // Default: 4, recommended: 1-16 pixels
+
+        // Dithering Settings
+        public DitherAlgorithm DitherMode = DitherAlgorithm.InterleavedGradientNoise;
+        public float DitherIntensity = 1.5f; // Range: 0.0 - 2.0
 
         /// <summary>
         /// Gets mirrored box settings

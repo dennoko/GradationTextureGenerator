@@ -35,6 +35,8 @@ namespace GradationBaker.UI
         private static readonly int PropUseMaskTexture    = Shader.PropertyToID("_UseMaskTexture");
         private static readonly int PropUseVertexColorMask = Shader.PropertyToID("_UseVertexColorMask");
         private static readonly int PropInvertMask        = Shader.PropertyToID("_InvertMask");
+        private static readonly int PropDitherMode        = Shader.PropertyToID("_DitherMode");
+        private static readonly int PropDitherIntensity   = Shader.PropertyToID("_DitherIntensity");
 
         private class ProxyEntry
         {
@@ -103,6 +105,9 @@ namespace GradationBaker.UI
             _previewMaterial.SetInt(PropUseMirror, isMirrorEnabled ? 1 : 0);
             _previewMaterial.SetMatrix(PropWorldToBoxMirror, worldToBoxMirror);
             _previewMaterial.SetInt(PropMirrorBlendMode, (int)settings.MirrorBlend);
+
+            _previewMaterial.SetInt(PropDitherMode, (int)settings.DitherMode);
+            _previewMaterial.SetFloat(PropDitherIntensity, settings.DitherIntensity);
 
             // Fetch or create Proxy
             if (!_proxies.TryGetValue(renderer, out var proxy) || proxy.ProxyObject == null)

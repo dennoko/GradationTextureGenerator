@@ -77,5 +77,8 @@
     "blend_replace": "Replace",
     "blend_additive": "Additive",
     "blend_screen": "Screen",
-    "blend_multiply": "Multiply"
+    "blend_multiply": "Multiply",
+    "dither_mode": "Dithering",
+    "dither_none": "None",
+    "dither_intensity": "Dither Intensity"
 }

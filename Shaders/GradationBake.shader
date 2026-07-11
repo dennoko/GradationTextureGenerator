@@ -4,6 +4,8 @@ Shader "Hidden/GradationBaker/Bake"
     {
         _MainTex ("LUT", 2D) = "white" {}
         _MaskTex ("Mask", 2D) = "white" {}
+        _DitherMode ("Dither Mode", Int) = 0
+        _DitherIntensity ("Dither Intensity", Float) = 1.0
     }
     SubShader
     {
@@ -55,6 +57,46 @@ Shader "Hidden/GradationBaker/Bake"
             int _UseMaskTexture;
             int _UseVertexColorMask;
             int _InvertMask;
+            int _DitherMode;
+            float _DitherIntensity;
+
+            // Noise & Dithering Helper Functions
+            float hash12(float2 p)
+            {
+                return frac(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453);
+            }
+
+            float InterleavedGradientNoise(float2 pixelPos)
+            {
+                return frac(52.9829189 * frac(dot(pixelPos, float2(0.06711056, 0.00583715))));
+            }
+
+            float TriangularNoise(float2 pixelPos)
+            {
+                float r1 = hash12(pixelPos);
+                float r2 = hash12(pixelPos + float2(47.12, 93.31));
+                return (r1 + r2) - 1.0;
+            }
+
+            fixed4 ApplyDithering(fixed4 col, float2 pixelPos)
+            {
+                if (_DitherMode == 0) return col;
+
+                float noise = 0.0;
+                if (_DitherMode == 1) // Interleaved Gradient Noise
+                {
+                    noise = InterleavedGradientNoise(pixelPos) - 0.5;
+                }
+                else if (_DitherMode == 2) // Triangular Noise (TPDF)
+                {
+                    noise = TriangularNoise(pixelPos) * 0.5;
+                }
+
+                float ditherStep = 1.0 / 255.0;
+                float3 ditherScale = sqrt(saturate(col.rgb));
+                col.rgb = saturate(col.rgb + noise * _DitherIntensity * ditherStep * ditherScale);
+                return col;
+            }
 
             v2f vert (appdata v)
             {
@@ -120,6 +162,8 @@ Shader "Hidden/GradationBaker/Bake"
                 }
 
                 col.a *= mask;
+
+                col = ApplyDithering(col, i.vertex.xy);
 
                 return col;
             }

@@ -136,6 +136,8 @@ namespace GradationBaker.Execute
             mat.SetMatrix("_WorldToBox", worldToBox);
             mat.SetMatrix("_ObjectToWorld", objectToWorld);
             mat.SetInt("_Shape", (int)settings.Shape);
+            mat.SetInt("_DitherMode", (int)settings.DitherMode);
+            mat.SetFloat("_DitherIntensity", settings.DitherIntensity);
             
             // UV Channel (per-mesh)
             mat.SetInt("_UVChannel", entry.UVChannel);

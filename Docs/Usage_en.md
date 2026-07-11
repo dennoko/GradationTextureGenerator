@@ -86,8 +86,11 @@ Use the "Blend Mode" dropdown in the "Preview" section to switch how the gradien
 | Save Path | Save destination when the above is OFF (use "..." button to browse) |
 | Background | Choose from Transparent / White / Black |
 | Edge Padding | Expands UV island edges outwards (0–16px) to prevent seam artifacts during sampling |
+| Dithering | Applies a subtle noise to smooth out color gradients and prevent color banding (IGN or TPDF, default: IGN at 1.5 intensity). |
 
 > **Tip**: If you notice "seams" due to MIP mapping or texture sampling, setting Edge Padding to 4px or higher is recommended.
+
+> **Tip**: Dithering automatically applies inverse correction for sRGB perceptual space (square root scaling), which effectively resolves color banding in dark areas while keeping noise from becoming overly visible or noisy.
 
 > **Note**: After saving, the first saved texture will automatically be selected and revealed in the Project tab.
 

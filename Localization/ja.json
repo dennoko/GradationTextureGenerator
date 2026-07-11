@@ -78,5 +78,8 @@
     "blend_replace": "置換 (Replace)",
     "blend_additive": "加算 (Additive)",
     "blend_screen": "スクリーン (Screen)",
-    "blend_multiply": "乗算 (Multiply)"
+    "blend_multiply": "乗算 (Multiply)",
+    "dither_mode": "ディザリング",
+    "dither_none": "なし",
+    "dither_intensity": "ディザー強度"
 }

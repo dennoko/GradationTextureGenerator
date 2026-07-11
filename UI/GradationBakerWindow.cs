@@ -519,6 +519,19 @@ namespace GradationBaker.UI
                     GUILayout.Label(L("edge_padding_help"), GradationBakerTheme.CaptionStyle);
                 }
 
+                EditorGUILayout.Space(4);
+                EditorGUI.BeginChangeCheck();
+                string[] ditherOptions = { L("dither_none"), "Interleaved Gradient Noise (IGN)", "Triangular Noise (TPDF)" };
+                _settings.DitherMode = (DitherAlgorithm)EditorGUILayout.Popup(L("dither_mode"), (int)_settings.DitherMode, ditherOptions);
+                if (_settings.DitherMode != DitherAlgorithm.None)
+                {
+                    _settings.DitherIntensity = EditorGUILayout.Slider(L("dither_intensity"), _settings.DitherIntensity, 0.0f, 2.0f);
+                }
+                if (EditorGUI.EndChangeCheck())
+                {
+                    SceneView.RepaintAll();
+                }
+
                 EditorGUIUtility.labelWidth = originalLabelWidth;
             });
         }
