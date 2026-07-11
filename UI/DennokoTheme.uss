@@ -130,16 +130,28 @@
    ObjectField など、.unity-base-field__input を持つすべてに適用される。 */
 
 .dennoko-root .unity-base-field__input,
-.dennoko-root .unity-base-field__input .unity-text-element,
-.dennoko-root .unity-base-field__input .unity-label,
 .dennoko-root .unity-object-field__input .unity-object-field-display__label {
     background-color: var(--dennoko-surface-1);
     border-color: var(--dennoko-outline);
     border-width: 1px;
     border-radius: 4px;
-    color: var(--dennoko-text-primary) !important;
     padding: 3px 6px;
     min-height: 22px;
+}
+
+.dennoko-root .unity-base-field__input,
+.dennoko-root .unity-base-field__input .unity-text-element,
+.dennoko-root .unity-base-field__input .unity-label,
+.dennoko-root .unity-object-field__input .unity-object-field-display__label {
+    color: var(--dennoko-text-primary) !important;
+}
+
+/* 複合フィールド(Vector3等)の二重枠線を回避するため、全体のコンテナ枠線をクリア */
+.dennoko-root .unity-multi-field__input {
+    background-color: transparent !important;
+    border-width: 0 !important;
+    padding: 0 !important;
+    min-height: auto !important;
 }
 
 .dennoko-root .unity-base-field:hover .unity-base-field__input {
@@ -176,10 +188,11 @@
     background-color: var(--dennoko-surface-2);
 }
 
+.dennoko-root .unity-toggle--checked .unity-toggle__checkmark,
 .dennoko-root .unity-toggle:checked .unity-toggle__checkmark {
-    background-color: var(--dennoko-accent);
+    background-color: var(--dennoko-accent) !important;
     /* チェックマーク画像がテーマ依存で見えなくならないよう暗色に固定 */
-    -unity-background-image-tint-color: var(--dennoko-surface-0);
+    -unity-background-image-tint-color: var(--dennoko-surface-0) !important;
 }
 
 /* ─── ⑤ フォールドアウト (Foldout) ───────────────────────── */
@@ -357,7 +370,7 @@
     color: var(--dennoko-text-secondary);
     font-size: 11px;
     padding: 5px 8px;
-    margin: 4px 8px;
+    margin: 4px 8px 8px 8px;
     white-space: normal;
 }
 

@@ -649,6 +649,7 @@ namespace GradationBaker.UI
             objectField.value = entry.SourceRenderer;
             objectField.allowSceneObjects = true;
             objectField.style.flexGrow = 1;
+            objectField.style.flexShrink = 1;
             objectField.RegisterValueChangedCallback(evt => {
                 var renderer = evt.newValue as Renderer;
                 entry.SourceRenderer = renderer;
@@ -707,6 +708,7 @@ namespace GradationBaker.UI
                 uvDropdown.choices = new List<string> { "UV0", "UV1", "UV2", "UV3" };
                 uvDropdown.index = entry.UVChannel;
                 uvDropdown.style.flexGrow = 1;
+                uvDropdown.style.flexShrink = 1;
                 uvDropdown.RegisterValueChangedCallback(evt => {
                     entry.UVChannel = uvDropdown.index;
                     SceneView.RepaintAll();
@@ -726,6 +728,7 @@ namespace GradationBaker.UI
                 maskField.value = entry.MaskTexture;
                 maskField.allowSceneObjects = false;
                 maskField.style.flexGrow = 1;
+                maskField.style.flexShrink = 1;
                 maskField.RegisterValueChangedCallback(evt => {
                     entry.MaskTexture = maskField.value as Texture2D;
                     SceneView.RepaintAll();
