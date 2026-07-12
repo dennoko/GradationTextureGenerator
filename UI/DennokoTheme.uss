@@ -102,6 +102,7 @@
     -unity-font-style: bold;
     font-size: 13px;
     height: 34px;
+    flex-shrink: 0; /* 親が潰れても固定高のボタン自体は縮めない */
 }
 
 /* Secondary Action ボタン (Reset All 等) */
@@ -111,14 +112,16 @@
     color: var(--dennoko-text-secondary);
 }
 
-/* Toggle ボタン型のアクティブ状態用 (ON/OFF 切り替えボタン等) */
+/* Toggle ボタン型のアクティブ状態用 (ON/OFF 切り替えボタン等)
+   ※ USS に !important は存在しない (書くと宣言ごと破棄される)。
+      .unity-button より後に定義することで同詳細度でも勝たせる。 */
 .dennoko-root .dennoko-button-active {
-    background-color: var(--dennoko-surface-2) !important;
-    color: var(--dennoko-text-primary) !important;
+    background-color: var(--dennoko-surface-2);
+    color: var(--dennoko-text-primary);
     -unity-font-style: bold;
 }
 .dennoko-root .dennoko-button-active:hover {
-    background-color: var(--dennoko-outline) !important;
+    background-color: var(--dennoko-outline);
 }
 
 .dennoko-root .dennoko-button-secondary:hover {
@@ -143,15 +146,17 @@
 .dennoko-root .unity-base-field__input .unity-text-element,
 .dennoko-root .unity-base-field__input .unity-label,
 .dennoko-root .unity-object-field__input .unity-object-field-display__label {
-    color: var(--dennoko-text-primary) !important;
+    color: var(--dennoko-text-primary);
 }
 
-/* 複合フィールド(Vector3等)の二重枠線を回避するため、全体のコンテナ枠線をクリア */
-.dennoko-root .unity-multi-field__input {
-    background-color: transparent !important;
-    border-width: 0 !important;
-    padding: 0 !important;
-    min-height: auto !important;
+/* 複合フィールド(Vector3等)の二重枠線を回避するため、全体のコンテナ枠線をクリア
+   (前段の .unity-base-field__input より後に置いて同詳細度で上書きする) */
+.dennoko-root .unity-multi-field__input,
+.dennoko-root .unity-composite-field__input {
+    background-color: transparent;
+    border-width: 0;
+    padding: 0;
+    min-height: auto;
 }
 
 .dennoko-root .unity-base-field:hover .unity-base-field__input {
@@ -188,11 +193,13 @@
     background-color: var(--dennoko-surface-2);
 }
 
-.dennoko-root .unity-toggle--checked .unity-toggle__checkmark,
+/* checked 時: 白背景 + 暗色チェックで状態をはっきり示す。
+   疑似クラス :checked を含むぶん上の素のルールより詳細度が高く、
+   同詳細度の :hover ルールにはファイル内で後に書くことで勝つ。 */
 .dennoko-root .unity-toggle:checked .unity-toggle__checkmark {
-    background-color: var(--dennoko-accent) !important;
+    background-color: var(--dennoko-accent);
     /* チェックマーク画像がテーマ依存で見えなくならないよう暗色に固定 */
-    -unity-background-image-tint-color: var(--dennoko-surface-0) !important;
+    -unity-background-image-tint-color: var(--dennoko-surface-0);
 }
 
 /* ─── ⑤ フォールドアウト (Foldout) ───────────────────────── */
@@ -257,6 +264,48 @@
     -unity-background-image-tint-color: var(--dennoko-text-tertiary);
 }
 
+/* スクロールバー内部のスライダーには ⑥ のスライダー装飾を適用しない。
+   (枠線・背景がつまみとトラックに波及して位置ずれ・見た目崩れの原因になる) */
+.dennoko-root .unity-scroller .unity-base-slider__tracker,
+.dennoko-root .unity-scroller #unity-tracker {
+    background-color: transparent;
+    border-width: 0;
+    border-radius: 0;
+}
+
+.dennoko-root .unity-scroller .unity-base-slider__dragger,
+.dennoko-root .unity-scroller #unity-dragger {
+    background-color: var(--dennoko-outline);
+    border-width: 0;
+    border-radius: 4px;
+}
+
+.dennoko-root .unity-scroller .unity-base-slider__dragger:hover,
+.dennoko-root .unity-scroller #unity-dragger:hover {
+    background-color: var(--dennoko-text-tertiary);
+}
+
+/* つまみをトラック中央に固定する。
+   左右 (縦バー) / 上下 (横バー) を同値でストレッチさせることで
+   トラック幅に依存せず常にセンタリングされる。 */
+.dennoko-root .unity-scroller--vertical .unity-base-slider__dragger,
+.dennoko-root .unity-scroller--vertical #unity-dragger {
+    width: auto;
+    left: 2px;
+    right: 2px;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.dennoko-root .unity-scroller--horizontal .unity-base-slider__dragger,
+.dennoko-root .unity-scroller--horizontal #unity-dragger {
+    height: auto;
+    top: 2px;
+    bottom: 2px;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
 /* ─── フローティングデザイン用セマンティッククラス ─────────
    以下は Unity ビルトインではなく dennokoworks 独自のクラス。
    UXML 側で class 属性として付与して使う。
@@ -293,6 +342,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 8px 12px;
+    flex-shrink: 0; /* ウィンドウが狭いときは ScrollView 側だけを縮ませる */
 }
 
 /* ウィンドウタイトル */
@@ -351,6 +401,7 @@
     height: 1px;
     background-color: var(--dennoko-outline);
     margin: 4px 0;
+    flex-shrink: 0;
 }
 
 /* ツールバー行 (カード上端に密着させる想定) */
@@ -372,6 +423,7 @@
     padding: 5px 8px;
     margin: 4px 8px 8px 8px;
     white-space: normal;
+    flex-shrink: 0; /* ウィンドウが狭いときは ScrollView 側だけを縮ませる */
 }
 
 .dennoko-status--success {

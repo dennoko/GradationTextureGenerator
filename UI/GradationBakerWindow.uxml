@@ -127,7 +127,7 @@
         </ui:ScrollView>
 
         <!-- フッター (ベイクボタン) -->
-        <ui:VisualElement class="dennoko-card" style="margin-top: 4px; margin-bottom: 8px;">
+        <ui:VisualElement class="dennoko-card" style="margin-top: 4px; margin-bottom: 8px; flex-shrink: 0;">
             <ui:Button name="bake-button" text="Bake &amp; Save" class="dennoko-button-primary" />
         </ui:VisualElement>
 
