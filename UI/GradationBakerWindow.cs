@@ -114,9 +114,8 @@ namespace GradationBaker.UI
         {
             _rootElement = rootVisualElement;
 
+            // 背景色や flex-grow は .dennoko-root として USS 側で定義される
             _rootElement.AddToClassList("dennoko-root");
-            _rootElement.style.backgroundColor = new StyleColor(new Color32(0x12, 0x12, 0x12, 0xFF));
-            _rootElement.style.flexGrow = 1;
 
             // Load USS
             string ussPath = AssetDatabase.GUIDToAssetPath(USS_GUID);
@@ -530,13 +529,13 @@ namespace GradationBaker.UI
             dropArea.RegisterCallback<DragEnterEvent>(evt => {
                 if (IsValidDragObject())
                 {
-                    dropArea.style.backgroundColor = new StyleColor(new Color32(0x3a, 0x3a, 0x3a, 0xFF));
+                    dropArea.AddToClassList("dennoko-drop-area--hover");
                     DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
                 }
             });
 
             dropArea.RegisterCallback<DragLeaveEvent>(evt => {
-                dropArea.style.backgroundColor = new StyleColor(new Color32(0x2c, 0x2c, 0x2c, 0xFF));
+                dropArea.RemoveFromClassList("dennoko-drop-area--hover");
             });
 
             dropArea.RegisterCallback<DragUpdatedEvent>(evt => {
@@ -547,7 +546,7 @@ namespace GradationBaker.UI
             });
 
             dropArea.RegisterCallback<DragPerformEvent>(evt => {
-                dropArea.style.backgroundColor = new StyleColor(new Color32(0x2c, 0x2c, 0x2c, 0xFF));
+                dropArea.RemoveFromClassList("dennoko-drop-area--hover");
                 if (IsValidDragObject())
                 {
                     DragAndDrop.AcceptDrag();
@@ -632,8 +631,7 @@ namespace GradationBaker.UI
 
             // Header line
             var header = new VisualElement();
-            header.style.flexDirection = FlexDirection.Row;
-            header.style.alignItems = Align.Center;
+            header.AddToClassList("dennoko-mesh-item-header");
 
             var foldout = new Foldout();
             foldout.text = "";
@@ -648,8 +646,7 @@ namespace GradationBaker.UI
             objectField.objectType = typeof(Renderer);
             objectField.value = entry.SourceRenderer;
             objectField.allowSceneObjects = true;
-            objectField.style.flexGrow = 1;
-            objectField.style.flexShrink = 1;
+            objectField.AddToClassList("dennoko-grow");
             objectField.RegisterValueChangedCallback(evt => {
                 var renderer = evt.newValue as Renderer;
                 entry.SourceRenderer = renderer;
@@ -675,8 +672,7 @@ namespace GradationBaker.UI
             {
                 var statusLabel = new Label("[" + L("work") + "]");
                 statusLabel.AddToClassList("dennoko-text-tertiary");
-                statusLabel.style.marginLeft = 4;
-                statusLabel.style.marginRight = 4;
+                statusLabel.AddToClassList("dennoko-mesh-tag");
                 header.Add(statusLabel);
             }
 
@@ -695,20 +691,19 @@ namespace GradationBaker.UI
             {
                 var details = new VisualElement();
                 details.AddToClassList("dennoko-indent");
-                details.style.marginTop = 4;
+                details.AddToClassList("dennoko-mesh-item-details");
 
                 // UV Channel
                 var uvRow = new VisualElement();
                 uvRow.AddToClassList("dennoko-horizontal");
                 uvRow.AddToClassList("dennoko-field-row");
                 var uvLabel = new Label(L("uv_channel"));
-                uvLabel.style.width = 80;
+                uvLabel.AddToClassList("dennoko-field-label");
                 uvRow.Add(uvLabel);
                 var uvDropdown = new DropdownField();
                 uvDropdown.choices = new List<string> { "UV0", "UV1", "UV2", "UV3" };
                 uvDropdown.index = entry.UVChannel;
-                uvDropdown.style.flexGrow = 1;
-                uvDropdown.style.flexShrink = 1;
+                uvDropdown.AddToClassList("dennoko-grow");
                 uvDropdown.RegisterValueChangedCallback(evt => {
                     entry.UVChannel = uvDropdown.index;
                     SceneView.RepaintAll();
@@ -721,14 +716,13 @@ namespace GradationBaker.UI
                 maskRow.AddToClassList("dennoko-horizontal");
                 maskRow.AddToClassList("dennoko-field-row");
                 var maskLabel = new Label(L("mask_texture"));
-                maskLabel.style.width = 80;
+                maskLabel.AddToClassList("dennoko-field-label");
                 maskRow.Add(maskLabel);
                 var maskField = new ObjectField();
                 maskField.objectType = typeof(Texture2D);
                 maskField.value = entry.MaskTexture;
                 maskField.allowSceneObjects = false;
-                maskField.style.flexGrow = 1;
-                maskField.style.flexShrink = 1;
+                maskField.AddToClassList("dennoko-grow");
                 maskField.RegisterValueChangedCallback(evt => {
                     entry.MaskTexture = maskField.value as Texture2D;
                     SceneView.RepaintAll();
@@ -740,7 +734,7 @@ namespace GradationBaker.UI
                 var optRow = new VisualElement();
                 optRow.AddToClassList("dennoko-horizontal");
                 optRow.AddToClassList("dennoko-field-row");
-                optRow.style.marginLeft = 80;
+                optRow.AddToClassList("dennoko-field-offset");
                 var useVertexToggle = new Toggle(L("use_vertex_color"));
                 useVertexToggle.value = entry.UseVertexColorMask;
                 useVertexToggle.RegisterValueChangedCallback(evt => {
@@ -762,7 +756,7 @@ namespace GradationBaker.UI
                 var splitRow = new VisualElement();
                 splitRow.AddToClassList("dennoko-horizontal");
                 splitRow.AddToClassList("dennoko-field-row");
-                splitRow.style.marginLeft = 80;
+                splitRow.AddToClassList("dennoko-field-offset");
                 var splitToggle = new Toggle(L("split_by_material"));
                 splitToggle.value = entry.SplitByMaterial;
                 splitToggle.RegisterValueChangedCallback(evt => {
@@ -785,7 +779,7 @@ namespace GradationBaker.UI
                         slotHeaderRow.AddToClassList("dennoko-horizontal");
                         slotHeaderRow.AddToClassList("dennoko-field-row");
                         var slotLabel = new Label(L("material_slots"));
-                        slotLabel.style.width = 80;
+                        slotLabel.AddToClassList("dennoko-field-label");
                         slotHeaderRow.Add(slotLabel);
                         details.Add(slotHeaderRow);
 
@@ -796,7 +790,7 @@ namespace GradationBaker.UI
                             var toggleRow = new VisualElement();
                             toggleRow.AddToClassList("dennoko-horizontal");
                             toggleRow.AddToClassList("dennoko-field-row");
-                            toggleRow.style.marginLeft = 80;
+                            toggleRow.AddToClassList("dennoko-field-offset");
 
                             var slotToggle = new Toggle(matName);
                             slotToggle.value = entry.EnabledMaterialSlots[slotIndex];
