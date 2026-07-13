@@ -82,6 +82,34 @@ namespace GradationBaker.UI
 
         public enum StatusType { Info, Success, Error }
 
+        // 端末にインストールされたメイリオを動的参照する(アセット同梱を避けるため)。
+        // UI Toolkit のテキストは TextCore で描画されるため、レガシー Font(CreateDynamicFontFromOSFont)
+        // ではグリフ生成に失敗して文字が表示されない。OS フォントから直接 SDF FontAsset を生成すること。
+        // 未搭載環境(Mac/Linux 等)では null のままエディタ標準フォントにフォールバックする。
+        private const string UI_FONT_FAMILY = "Meiryo";
+        private static UnityEngine.TextCore.Text.FontAsset _uiFontAsset;
+        private static bool _uiFontSearched;
+
+        private static UnityEngine.TextCore.Text.FontAsset GetUIFontAsset()
+        {
+            if (_uiFontSearched) return _uiFontAsset;
+            _uiFontSearched = true;
+
+            try
+            {
+                _uiFontAsset = UnityEngine.TextCore.Text.FontAsset.CreateFontAsset(UI_FONT_FAMILY, "Regular");
+                if (_uiFontAsset != null)
+                {
+                    _uiFontAsset.hideFlags = HideFlags.HideAndDontSave;
+                }
+            }
+            catch
+            {
+                _uiFontAsset = null;
+            }
+            return _uiFontAsset;
+        }
+
         [MenuItem("dennokoworks/Gradation Baker")]
         public static void ShowWindow()
         {
@@ -116,6 +144,13 @@ namespace GradationBaker.UI
 
             // 背景色や flex-grow は .dennoko-root として USS 側で定義される
             _rootElement.AddToClassList("dennoko-root");
+
+            // OS のメイリオが使えればウィンドウ全体のフォントに設定(全テキスト要素に継承される)
+            var uiFontAsset = GetUIFontAsset();
+            if (uiFontAsset != null)
+            {
+                _rootElement.style.unityFontDefinition = FontDefinition.FromSDFFont(uiFontAsset);
+            }
 
             // Load USS
             string ussPath = AssetDatabase.GUIDToAssetPath(USS_GUID);
