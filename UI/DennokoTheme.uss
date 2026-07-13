@@ -180,7 +180,6 @@
     border-radius: 4px;
     color: var(--dennoko-text-primary);
     padding: 3px 6px;
-    min-height: 22px;
 }
 
 /* 内側のテキスト要素には color のみを適用する。
@@ -199,7 +198,6 @@
     background-color: transparent;
     border-width: 0;
     padding: 0;
-    min-height: auto;
 }
 
 .dennoko-root .unity-base-field:hover .unity-base-field__input {
