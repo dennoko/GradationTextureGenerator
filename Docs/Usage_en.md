@@ -77,6 +77,19 @@ Use the "Blend Mode" dropdown in the "Preview" section to switch how the gradien
 
 > **Note**: The preview overlay is simplified. The generated texture colors correspond to an opacity of 1 (fully opaque).
 
+### Dithering
+
+This feature reduces color banding (visible steps or stripes in the gradient) caused by limited color precision during texture output and previews.
+
+- **Dithering Mode (Dithering)**:
+  - **None**: No dithering is applied.
+  - **Interleaved Gradient Noise (IGN)**: Applies high-frequency noise in pixel space. It provides a sharp, structured noise that quickly and cleanly reduces banding (default).
+  - **Triangular Noise (TPDF)**: Applies white noise with a triangular probability density function (TPDF). It yields a more random, uniform noise distribution.
+- **Dither Intensity**:
+  - Adjusts the strength of the noise (0.0 to 2.0). Higher values make the noise more noticeable but reduce color banding more effectively.
+
+> **Tip**: Dithering automatically applies an inverse correction for sRGB perceptual space (square root scaling) based on human visual characteristics. This minimizes unwanted noise scaling in darker regions while effectively eliminating banding.
+
 ### Output Settings
 
 | Setting | Description |
@@ -89,8 +102,6 @@ Use the "Blend Mode" dropdown in the "Preview" section to switch how the gradien
 | Dithering | Applies a subtle noise to smooth out color gradients and prevent color banding (IGN or TPDF, default: IGN at 1.5 intensity). |
 
 > **Tip**: If you notice "seams" due to MIP mapping or texture sampling, setting Edge Padding to 4px or higher is recommended.
-
-> **Tip**: Dithering automatically applies inverse correction for sRGB perceptual space (square root scaling), which effectively resolves color banding in dark areas while keeping noise from becoming overly visible or noisy.
 
 > **Note**: After saving, the first saved texture will automatically be selected and revealed in the Project tab.
 
