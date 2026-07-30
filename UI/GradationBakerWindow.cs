@@ -131,11 +131,19 @@ namespace GradationBaker.UI
 
         private void OnDisable()
         {
+            // OnDisable はドメインリロード (スクリプト再コンパイル) や Play モード遷移でも呼ばれる。
+            // プレビュー用プロキシは HideAndDontSave なのでここで破棄してよいが、
+            // 作業メッシュは通常のシーンオブジェクトなので消してはいけない (OnDestroy で処理する)。
             SceneView.duringSceneGui -= OnSceneGUI;
             _sceneHandle?.Cleanup();
             _preview?.Cleanup();
-            CleanupAllWorkMeshes();
             NdmfPreviewBridge.RestorePreview();
+        }
+
+        private void OnDestroy()
+        {
+            // ウィンドウを閉じたときだけ作業メッシュを片付ける
+            CleanupAllWorkMeshes();
         }
 
         public void CreateGUI()
@@ -323,8 +331,10 @@ namespace GradationBaker.UI
                 SceneView.RepaintAll();
             });
             _centerResetButton.clicked += () => {
+                // FitToAllMeshBounds は Center だけでなく Height/Size/Rotation も更新するので
+                // 全フィールドをまとめて反映する
                 _settings.FitToAllMeshBounds();
-                _centerField.value = _settings.BoxCenter;
+                UpdateUIStates();
                 SceneView.RepaintAll();
             };
 
@@ -335,7 +345,7 @@ namespace GradationBaker.UI
             });
             _rotationResetButton.clicked += () => {
                 _settings.BoxRotation = Quaternion.identity;
-                _rotationField.value = Vector3.zero;
+                _rotationField.SetValueWithoutNotify(Vector3.zero);
                 SceneView.RepaintAll();
             };
 
@@ -541,8 +551,12 @@ namespace GradationBaker.UI
             _outsideAssetsWarning.style.display = (outsideAssets && !_settings.UseTextureFolder) ? DisplayStyle.Flex : DisplayStyle.None;
             _outsideAssetsWarning.text = L("save_path_outside_assets");
 
-            // Edge padding help
-            _edgePaddingHelpLabel.style.display = _settings.EdgePaddingPixels > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            // Edge padding
+            // パディングは透明ピクセルを膨張させる処理なので、背景が不透明だと何も起きない
+            bool edgePaddingUsable = _settings.BgColor == BackgroundColor.Transparent;
+            _edgePaddingSlider.SetEnabled(edgePaddingUsable);
+            _edgePaddingHelpLabel.style.display =
+                (edgePaddingUsable && _settings.EdgePaddingPixels > 0) ? DisplayStyle.Flex : DisplayStyle.None;
 
             // Dither settings
             _ditherIntensitySlider.style.display = _settings.DitherMode != DitherAlgorithm.None ? DisplayStyle.Flex : DisplayStyle.None;
@@ -551,10 +565,13 @@ namespace GradationBaker.UI
             _ndmfPreviewSuspendedLabel.style.display = NdmfPreviewBridge.IsSuppressing ? DisplayStyle.Flex : DisplayStyle.None;
 
             // Dynamic fields updates
-            _centerField.value = _settings.BoxCenter;
-            _rotationField.value = _settings.BoxRotation.eulerAngles;
-            _heightField.value = _settings.BoxHeight;
-            _sizeField.value = _settings.BoxScale;
+            // SetValueWithoutNotify を使わないと ChangeEvent が発火し、登録済みコールバックが
+            // 値を設定へ書き戻してしまう。特に回転は Quaternion → eulerAngles → Quaternion の
+            // 往復で情報が失われ、SceneView のハンドル操作が引っかかる。
+            _centerField.SetValueWithoutNotify(_settings.BoxCenter);
+            _rotationField.SetValueWithoutNotify(_settings.BoxRotation.eulerAngles);
+            _heightField.SetValueWithoutNotify(_settings.BoxHeight);
+            _sizeField.SetValueWithoutNotify(_settings.BoxScale);
         }
 
         private void SetupDragAndDrop(VisualElement dropArea)
@@ -964,7 +981,7 @@ namespace GradationBaker.UI
             FileLogger.Clear();
             FileLogger.Log("[GradationBakerWindow] Bake & Save clicked.");
 
-            List<BakeResult> results;
+            List<BakeResult> results = null;
             int savedCount = 0;
             List<string> savedPaths = new List<string>();
 
@@ -981,23 +998,13 @@ namespace GradationBaker.UI
             finally
             {
                 EditorUtility.ClearProgressBar();
+                // 保存済みテクスチャは SaveTexture が破棄する。
+                // 途中で例外が出た場合に残ったものをここで確実に解放する。
+                DestroyRemainingTextures(results);
             }
 
             AssetDatabase.Refresh();
-
-            if (_settings.BgColor == BackgroundColor.Transparent)
-            {
-                foreach (string fullPath in savedPaths)
-                {
-                    if (!TryGetAssetPath(fullPath, out string assetPath)) continue;
-                    TextureImporter importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
-                    if (importer != null)
-                    {
-                        importer.alphaIsTransparency = true;
-                        importer.SaveAndReimport();
-                    }
-                }
-            }
+            ApplyTextureImportSettings(savedPaths);
 
             if (savedCount > 0)
             {
@@ -1017,6 +1024,55 @@ namespace GradationBaker.UI
             else
             {
                 SetStatus(L("status_bake_error"), StatusType.Error, 0);
+            }
+        }
+
+        /// <summary>
+        /// 保存した PNG のインポート設定を適用する。
+        /// maxTextureSize を明示しないと、TextureImporter の既定値 (2048) によって
+        /// 4096 でベイクしたテクスチャがインポート時に縮小されてしまう。
+        /// </summary>
+        private void ApplyTextureImportSettings(List<string> savedPaths)
+        {
+            if (savedPaths.Count == 0) return;
+
+            // ファイル毎に SaveAndReimport すると同期リインポートが都度走るためまとめる
+            AssetDatabase.StartAssetEditing();
+            try
+            {
+                foreach (string fullPath in savedPaths)
+                {
+                    if (!TryGetAssetPath(fullPath, out string assetPath)) continue;
+
+                    TextureImporter importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
+                    if (importer == null) continue;
+
+                    importer.maxTextureSize = _settings.Resolution;
+                    importer.alphaIsTransparency = _settings.BgColor == BackgroundColor.Transparent;
+                    importer.SaveAndReimport();
+                }
+            }
+            finally
+            {
+                AssetDatabase.StopAssetEditing();
+            }
+        }
+
+        private static void DestroyRemainingTextures(List<BakeResult> results)
+        {
+            if (results == null) return;
+
+            foreach (var result in results)
+            {
+                if (result == null) continue;
+
+                if (result.Texture != null) Object.DestroyImmediate(result.Texture);
+
+                if (result.SubMeshResults == null) continue;
+                foreach (var subRes in result.SubMeshResults)
+                {
+                    if (subRes.Texture != null) Object.DestroyImmediate(subRes.Texture);
+                }
             }
         }
 

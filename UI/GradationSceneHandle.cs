@@ -18,7 +18,6 @@ namespace GradationBaker.UI
     
     public class GradationSceneHandle
     {
-        private Quaternion _lastRotation;
         private static readonly Color BoxColor = new Color(1f, 1f, 0f, 0.3f);
         private static readonly Color BoxOutlineColor = new Color(1f, 1f, 0f, 0.8f);
         private static readonly Color TopHandleColor = new Color(1f, 0.3f, 0.3f, 1f);

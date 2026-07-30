@@ -44,20 +44,38 @@ namespace GradationBaker.UI
             public MeshFilter MeshFilter;
             public MeshRenderer MeshRenderer;
             public SkinnedMeshRenderer SkinnedRenderer;
+
+            // マテリアル配列とプロパティブロックの再設定はネイティブ呼び出しを伴うため、
+            // 実際に内容が変わったときだけ行う。
+            public Material[] AssignedMaterials;
+            public int LastMaskStateHash = int.MinValue;
+            public bool HasBlockState;
+            public bool LastUseMirror;
+            public Matrix4x4 LastWorldToBoxMirror;
+
+            // ?? は Unity の破棄済みオブジェクト (fake null) を拾えないため明示的に比較する
+            public Renderer Renderer => SkinnedRenderer != null ? (Renderer)SkinnedRenderer : MeshRenderer;
         }
 
         private readonly Dictionary<Renderer, ProxyEntry> _proxies = new Dictionary<Renderer, ProxyEntry>();
 
-        public void UpdatePreview(GradationSettings settings, MeshEntry entry)
-        {
-            Renderer renderer = entry.ActiveRenderer;
-            if (renderer == null) return;
+        // UpdatePreviewAll の毎イベント確保を避けるための再利用バッファ
+        private readonly HashSet<Renderer> _validRenderers = new HashSet<Renderer>();
+        private readonly List<Renderer> _proxiesToRemove = new List<Renderer>();
 
+        /// <summary>
+        /// 全メッシュ共通のシェーダープロパティ (Box 行列 / シェイプ / ディザ等) を更新する。
+        /// エントリ毎ではなく 1 フレームに 1 回で足りる。
+        /// ミラー行列はメッシュの Transform 基準で決まるため、ここではなく
+        /// エントリ毎の MaterialPropertyBlock で渡す (ベイク側と同じ基準にするため)。
+        /// </summary>
+        private bool UpdateSharedState(GradationSettings settings)
+        {
             // Lazy Init Material
             if (_previewMaterial == null)
             {
                 Shader shader = Shader.Find(ShaderPath);
-                if (shader == null) return;
+                if (shader == null) return false;
                 _previewMaterial = new Material(shader);
                 _previewMaterial.hideFlags = HideFlags.HideAndDontSave;
             }
@@ -69,10 +87,8 @@ namespace GradationBaker.UI
                 _disabledMaterial.hideFlags = HideFlags.HideAndDontSave;
             }
 
-            // Update LUT
             UpdateLUT(settings.Gradient);
 
-            // Calculate Main Matrix
             Matrix4x4 boxMatrix = Matrix4x4.TRS(
                 settings.BoxCenter,
                 settings.BoxRotation,
@@ -80,34 +96,29 @@ namespace GradationBaker.UI
             );
             Matrix4x4 worldToBox = boxMatrix.inverse;
 
-            // Calculate Mirror Matrix
-            bool isMirrorEnabled = settings.UseMirror && settings.MirrorAxis != MirrorAxis.None;
-            Matrix4x4 worldToBoxMirror = Matrix4x4.identity;
-
-            if (isMirrorEnabled)
-            {
-                var (mirrorCenter, mirrorRot) = settings.GetMirroredBox(renderer.transform);
-                Matrix4x4 mirrorBoxMatrix = Matrix4x4.TRS(
-                    mirrorCenter,
-                    mirrorRot,
-                    settings.BoxScale
-                );
-                worldToBoxMirror = mirrorBoxMatrix.inverse;
-            }
-
-            // Set global shader properties on Material
             _previewMaterial.SetTexture(PropMainTex, _lutTexture);
             _previewMaterial.SetMatrix(PropWorldToBox, worldToBox);
             _previewMaterial.SetFloat(PropBoxHeight, settings.BoxHeight);
             _previewMaterial.SetInt(PropShape, (int)settings.Shape);
             _previewMaterial.SetInt(PropBlendMode, (int)settings.BlendMode);
-
-            _previewMaterial.SetInt(PropUseMirror, isMirrorEnabled ? 1 : 0);
-            _previewMaterial.SetMatrix(PropWorldToBoxMirror, worldToBoxMirror);
             _previewMaterial.SetInt(PropMirrorBlendMode, (int)settings.MirrorBlend);
 
             _previewMaterial.SetInt(PropDitherMode, (int)settings.DitherMode);
             _previewMaterial.SetFloat(PropDitherIntensity, settings.DitherIntensity);
+
+            return true;
+        }
+
+        public void UpdatePreview(GradationSettings settings, MeshEntry entry)
+        {
+            if (!UpdateSharedState(settings)) return;
+            UpdateProxy(settings, entry);
+        }
+
+        private void UpdateProxy(GradationSettings settings, MeshEntry entry)
+        {
+            Renderer renderer = entry.ActiveRenderer;
+            if (renderer == null) return;
 
             // Fetch or create Proxy
             if (!_proxies.TryGetValue(renderer, out var proxy) || proxy.ProxyObject == null)
@@ -131,16 +142,76 @@ namespace GradationBaker.UI
                 SyncBlendShapes(sourceSmr, proxy.SkinnedRenderer);
             }
 
-            // Update proxy materials per slot (enabled → preview, disabled → transparent)
-            int slotCount = Mathf.Max(1, renderer.sharedMaterials.Length);
-            var proxyMats = new Material[slotCount];
-            for (int i = 0; i < slotCount; i++)
-                proxyMats[i] = entry.IsMaterialSlotEnabled(i) ? _previewMaterial : _disabledMaterial;
+            Renderer proxyRenderer = proxy.Renderer;
+            if (proxyRenderer == null) return;
 
-            // Use MaterialPropertyBlock for per-mesh settings
+            UpdateProxyMaterials(entry, renderer, proxy, proxyRenderer);
+            UpdateProxyPropertyBlock(settings, entry, renderer, proxy, proxyRenderer);
+        }
+
+        /// <summary>
+        /// スロットの有効/無効に応じてプレビュー用/透明マテリアルを割り当てる。
+        /// sharedMaterials への代入はネイティブ側のコストがあるため、内容が変わったときだけ行う。
+        /// </summary>
+        private void UpdateProxyMaterials(MeshEntry entry, Renderer source, ProxyEntry proxy, Renderer proxyRenderer)
+        {
+            int slotCount = Mathf.Max(1, source.sharedMaterials.Length);
+
+            Material[] mats = proxy.AssignedMaterials;
+            bool changed = mats == null || mats.Length != slotCount;
+            if (changed) mats = new Material[slotCount];
+
+            for (int i = 0; i < slotCount; i++)
+            {
+                Material desired = entry.IsMaterialSlotEnabled(i) ? _previewMaterial : _disabledMaterial;
+                if (mats[i] != desired)
+                {
+                    mats[i] = desired;
+                    changed = true;
+                }
+            }
+
+            if (!changed) return;
+
+            proxy.AssignedMaterials = mats;
+            proxyRenderer.sharedMaterials = mats;
+        }
+
+        /// <summary>
+        /// メッシュ毎のマスク設定とミラー行列を MaterialPropertyBlock で渡す。
+        /// 内容が変わったときだけ再設定する。
+        /// </summary>
+        private void UpdateProxyPropertyBlock(GradationSettings settings, MeshEntry entry, Renderer source,
+                                              ProxyEntry proxy, Renderer proxyRenderer)
+        {
+            bool useMirror = settings.UseMirror && settings.MirrorAxis != MirrorAxis.None;
+
+            // ミラーの基準はベイクと同じくそのメッシュ自身の Transform
+            Matrix4x4 worldToBoxMirror = Matrix4x4.identity;
+            if (useMirror)
+            {
+                var (mirrorCenter, mirrorRot) = settings.GetMirroredBox(source.transform);
+                worldToBoxMirror = Matrix4x4.TRS(mirrorCenter, mirrorRot, settings.BoxScale).inverse;
+            }
+
+            int hash = ComputeMaskStateHash(entry);
+            if (proxy.HasBlockState &&
+                hash == proxy.LastMaskStateHash &&
+                useMirror == proxy.LastUseMirror &&
+                worldToBoxMirror == proxy.LastWorldToBoxMirror)
+            {
+                return;
+            }
+
+            proxy.HasBlockState = true;
+            proxy.LastMaskStateHash = hash;
+            proxy.LastUseMirror = useMirror;
+            proxy.LastWorldToBoxMirror = worldToBoxMirror;
+
             if (_propertyBlock == null) _propertyBlock = new MaterialPropertyBlock();
             MaterialPropertyBlock block = _propertyBlock;
             block.Clear();
+
             block.SetInt(PropUVChannel, entry.UVChannel);
             if (entry.MaskTexture != null)
             {
@@ -154,15 +225,21 @@ namespace GradationBaker.UI
             block.SetInt(PropUseVertexColorMask, entry.UseVertexColorMask ? 1 : 0);
             block.SetInt(PropInvertMask, entry.InvertMask ? 1 : 0);
 
-            if (proxy.SkinnedRenderer != null)
+            block.SetInt(PropUseMirror, useMirror ? 1 : 0);
+            block.SetMatrix(PropWorldToBoxMirror, worldToBoxMirror);
+
+            proxyRenderer.SetPropertyBlock(block);
+        }
+
+        private static int ComputeMaskStateHash(MeshEntry entry)
+        {
+            unchecked
             {
-                proxy.SkinnedRenderer.sharedMaterials = proxyMats;
-                proxy.SkinnedRenderer.SetPropertyBlock(block);
-            }
-            else if (proxy.MeshRenderer != null)
-            {
-                proxy.MeshRenderer.sharedMaterials = proxyMats;
-                proxy.MeshRenderer.SetPropertyBlock(block);
+                int hash = entry.UVChannel;
+                hash = hash * 31 + (entry.MaskTexture != null ? entry.MaskTexture.GetInstanceID() : 0);
+                hash = hash * 31 + (entry.UseVertexColorMask ? 1 : 0);
+                hash = hash * 31 + (entry.InvertMask ? 1 : 0);
+                return hash;
             }
         }
 
@@ -201,9 +278,6 @@ namespace GradationBaker.UI
                 newSmr.sharedMesh = smr.sharedMesh;
                 newSmr.bones = smr.bones;
                 newSmr.rootBone = smr.rootBone;
-                var smrMats = new Material[Mathf.Max(1, smr.sharedMaterials.Length)];
-                for (int i = 0; i < smrMats.Length; i++) smrMats[i] = _previewMaterial;
-                newSmr.sharedMaterials = smrMats;
                 newSmr.updateWhenOffscreen = true;
                 proxy.SkinnedRenderer = newSmr;
 
@@ -221,9 +295,6 @@ namespace GradationBaker.UI
                 if (sourceMf != null) proxy.MeshFilter.sharedMesh = sourceMf.sharedMesh;
 
                 proxy.MeshRenderer = go.AddComponent<MeshRenderer>();
-                var mrMats = new Material[Mathf.Max(1, mr.sharedMaterials.Length)];
-                for (int i = 0; i < mrMats.Length; i++) mrMats[i] = _previewMaterial;
-                proxy.MeshRenderer.sharedMaterials = mrMats;
             }
             else
             {
@@ -231,24 +302,28 @@ namespace GradationBaker.UI
                 return null;
             }
 
+            // マテリアル割り当ては UpdateProxyMaterials が行う (AssignedMaterials == null なので初回で必ず走る)
             return proxy;
         }
 
         public void UpdatePreviewAll(GradationSettings settings)
         {
+            if (!UpdateSharedState(settings)) return;
+
             // Remove unused proxies
-            var validRenderers = new HashSet<Renderer>();
+            _validRenderers.Clear();
             foreach (var entry in settings.MeshEntries)
             {
-                if (entry.ActiveRenderer != null) validRenderers.Add(entry.ActiveRenderer);
+                Renderer active = entry.ActiveRenderer;
+                if (active != null) _validRenderers.Add(active);
             }
 
-            var toRemove = new List<Renderer>();
+            _proxiesToRemove.Clear();
             foreach (var renderer in _proxies.Keys)
             {
-                if (!validRenderers.Contains(renderer)) toRemove.Add(renderer);
+                if (!_validRenderers.Contains(renderer)) _proxiesToRemove.Add(renderer);
             }
-            foreach (var renderer in toRemove)
+            foreach (var renderer in _proxiesToRemove)
             {
                 if (_proxies[renderer].ProxyObject != null)
                 {
@@ -260,7 +335,7 @@ namespace GradationBaker.UI
             // Update all valid entries
             foreach (var entry in settings.MeshEntries)
             {
-                UpdatePreview(settings, entry);
+                UpdateProxy(settings, entry);
             }
         }
 

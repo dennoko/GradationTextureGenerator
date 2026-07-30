@@ -109,6 +109,9 @@ Shader "Hidden/GradationBaker/Bake"
                 else if (_UVChannel == 3) selectedUV = v.uv3;
                 
                 // UV to Clip Space mapping
+                // NOTE: Y 反転は D3D の RenderTexture 座標系を前提にしている。
+                // OpenGL / Metal へ対応する場合は _ProjectionParams.x を掛ける必要があるが、
+                // DrawMeshNow の即時描画パスでの値が環境依存のため要実機検証。
                 float2 uvClip = selectedUV * 2.0 - 1.0;
                 o.vertex = float4(uvClip.x, -uvClip.y, 0, 1);
 

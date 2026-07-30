@@ -78,10 +78,27 @@ namespace GradationBaker.Data
                 EnabledMaterialSlots.RemoveRange(count, EnabledMaterialSlots.Count - count);
         }
         
-        public Renderer ActiveRenderer => WorkMeshObject != null 
-            ? WorkMeshObject.GetComponent<Renderer>() 
-            : SourceRenderer;
-            
+        // ActiveRenderer は SceneView のイベント毎に何度も参照されるため、
+        // 作業メッシュの GetComponent 結果をキャッシュする。
+        // (元の GameObject が差し替わったときだけ引き直す)
+        [System.NonSerialized] private GameObject _cachedWorkMeshObject;
+        [System.NonSerialized] private Renderer _cachedWorkMeshRenderer;
+
+        public Renderer ActiveRenderer
+        {
+            get
+            {
+                if (WorkMeshObject == null) return SourceRenderer;
+
+                if (_cachedWorkMeshObject != WorkMeshObject || _cachedWorkMeshRenderer == null)
+                {
+                    _cachedWorkMeshObject = WorkMeshObject;
+                    _cachedWorkMeshRenderer = WorkMeshObject.GetComponent<Renderer>();
+                }
+                return _cachedWorkMeshRenderer;
+            }
+        }
+
         public bool HasWorkMesh => WorkMeshObject != null;
     }
 
@@ -119,15 +136,11 @@ namespace GradationBaker.Data
 
         // Computed properties for shader compatibility
         public Vector3 GradientDirection => BoxRotation * Vector3.up;
-        
+
         /// <summary>
         /// Returns the box scale vector used for matrix construction.
         /// </summary>
         public Vector3 BoxScale => new Vector3(BoxWidth, BoxHeight, BoxDepth);
-        
-        // Min/Max in world space along the gradient direction from box center
-        public float MinRange => Vector3.Dot(BoxCenter - BoxRotation * Vector3.up * (BoxHeight / 2f), GradientDirection);
-        public float MaxRange => Vector3.Dot(BoxCenter + BoxRotation * Vector3.up * (BoxHeight / 2f), GradientDirection);
 
         // Preview Settings
         public bool IsToolActive = true;
@@ -264,53 +277,47 @@ namespace GradationBaker.Data
         /// </summary>
         private void FitSphericalBounds()
         {
-            Vector3 globalCenter = Vector3.zero;
-            int totalVertices = 0;
-            
+            // mesh.vertices は呼ぶ度に新しい配列を確保して返すため、
+            // 重心と最大半径の 2 パスで使い回せるようワールド座標を 1 度だけ展開する。
+            var worldVertices = new List<Vector3>();
+
+            foreach (var entry in MeshEntries)
+            {
+                Renderer renderer = entry.ActiveRenderer;
+                if (renderer == null) continue;
+
+                Mesh mesh = GetMesh(renderer);
+                if (mesh == null) continue;
+
+                Vector3[] vertices = mesh.vertices;
+                Transform transform = renderer.transform;
+
+                worldVertices.Capacity = Mathf.Max(worldVertices.Capacity, worldVertices.Count + vertices.Length);
+                foreach (var v in vertices)
+                {
+                    worldVertices.Add(transform.TransformPoint(v));
+                }
+            }
+
+            if (worldVertices.Count == 0) return;
+
             // First pass: compute centroid
-            foreach (var entry in MeshEntries)
-            {
-                Renderer renderer = entry.ActiveRenderer;
-                if (renderer == null) continue;
-                
-                Mesh mesh = GetMesh(renderer);
-                if (mesh == null) continue;
-                
-                Vector3[] vertices = mesh.vertices;
-                Transform transform = renderer.transform;
-                
-                foreach (var v in vertices)
-                {
-                    globalCenter += transform.TransformPoint(v);
-                    totalVertices++;
-                }
-            }
-            
-            if (totalVertices == 0) return;
-            globalCenter /= totalVertices;
-            
+            Vector3 globalCenter = Vector3.zero;
+            foreach (var wv in worldVertices) globalCenter += wv;
+            globalCenter /= worldVertices.Count;
+
             // Second pass: find maximum distance from centroid
-            float maxDist = 0f;
-            foreach (var entry in MeshEntries)
+            // 平方根は最後に 1 回だけで足りるので二乗距離で比較する
+            float maxDistSqr = 0f;
+            foreach (var wv in worldVertices)
             {
-                Renderer renderer = entry.ActiveRenderer;
-                if (renderer == null) continue;
-                
-                Mesh mesh = GetMesh(renderer);
-                if (mesh == null) continue;
-                
-                Vector3[] vertices = mesh.vertices;
-                Transform transform = renderer.transform;
-                
-                foreach (var v in vertices)
-                {
-                    float dist = Vector3.Distance(globalCenter, transform.TransformPoint(v));
-                    if (dist > maxDist) maxDist = dist;
-                }
+                float distSqr = (wv - globalCenter).sqrMagnitude;
+                if (distSqr > maxDistSqr) maxDistSqr = distSqr;
             }
-            
+
+            float maxDist = Mathf.Sqrt(maxDistSqr);
             if (maxDist < 0.0001f) maxDist = 1f;
-            
+
             // Diameter = maxDist * 2, sets uniform scale
             float diameter = maxDist * 2f;
             BoxCenter = globalCenter;

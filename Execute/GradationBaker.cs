@@ -9,6 +9,43 @@ namespace GradationBaker.Execute
         private const string ShaderPath = "Hidden/GradationBaker/Bake";
 
         /// <summary>
+        /// シェーダー・マテリアル・LUT はグラデーション設定が共通なので
+        /// メッシュ毎に作り直さず 1 回だけ生成して使い回す。
+        /// </summary>
+        private class BakeContext : System.IDisposable
+        {
+            public Material Material;
+            public Texture2D Lut;
+
+            public bool IsValid => Material != null;
+
+            public static BakeContext Create(GradationSettings settings)
+            {
+                var ctx = new BakeContext();
+
+                Shader shader = Shader.Find(ShaderPath);
+                if (shader == null)
+                {
+                    FileLogger.LogError($"[GradationBaker] Shader not found at {ShaderPath}.");
+                    return ctx; // IsValid == false
+                }
+
+                ctx.Material = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+                ctx.Lut = CreateGradientLUT(settings.Gradient);
+                ctx.Material.SetTexture("_MainTex", ctx.Lut);
+                return ctx;
+            }
+
+            public void Dispose()
+            {
+                if (Material != null) Object.DestroyImmediate(Material);
+                if (Lut != null) Object.DestroyImmediate(Lut);
+                Material = null;
+                Lut = null;
+            }
+        }
+
+        /// <summary>
         /// Bakes gradation textures for all mesh entries (with optional mirror)
         /// </summary>
         /// <param name="onProgress">進捗通知 (current, total, name)。プログレスバー表示用 (省略可)</param>
@@ -18,64 +55,94 @@ namespace GradationBaker.Execute
             int total = settings.MeshEntries.Count;
             int current = 0;
 
-            foreach (var entry in settings.MeshEntries)
+            using (var ctx = BakeContext.Create(settings))
             {
-                current++;
-                Renderer renderer = entry.ActiveRenderer;
-                if (renderer == null) continue;
+                if (!ctx.IsValid) return results;
 
-                onProgress?.Invoke(current, total, renderer.name);
-                
-                // Bake main gradation (or split based on settings)
-                BakeResult bakeResult = Bake(settings, entry, false);
-                
-                // If mirror is enabled, blend with mirrored gradation
-                if (settings.UseMirror && settings.MirrorAxis != MirrorAxis.None)
+                foreach (var entry in settings.MeshEntries)
                 {
-                    // For split results
-                    if (bakeResult.SubMeshResults != null && bakeResult.SubMeshResults.Count > 0)
-                    {
-                        var mirrorResult = Bake(settings, entry, true);
-                        if (mirrorResult != null && mirrorResult.SubMeshResults != null)
-                        {
-                            for (int i = 0; i < bakeResult.SubMeshResults.Count; i++)
-                            {
-                                var mainTex = bakeResult.SubMeshResults[i].Texture;
-                                // Try to find matching submesh in mirror result
-                                // Note: Assuming submesh order and count is identical
-                                if (i < mirrorResult.SubMeshResults.Count)
-                                {
-                                    var mirrorTex = mirrorResult.SubMeshResults[i].Texture;
-                                    if (mainTex != null && mirrorTex != null)
-                                    {
-                                        BlendTextures(mainTex, mirrorTex, settings.MirrorBlend);
-                                    }
-                                }
-                            }
+                    current++;
+                    Renderer renderer = entry.ActiveRenderer;
+                    if (renderer == null) continue;
 
-                            // Cleanup mirror textures immediately as they are blended in
-                            foreach (var res in mirrorResult.SubMeshResults)
-                            {
-                                if (res.Texture != null) Object.DestroyImmediate(res.Texture);
-                            }
-                        }
-                    }
-                    // For single result
-                    else if (bakeResult.Texture != null)
+                    onProgress?.Invoke(current, total, renderer.name);
+
+                    // Bake main gradation (or split based on settings)
+                    BakeResult bakeResult = Bake(settings, entry, ctx, false);
+
+                    // If mirror is enabled, blend with mirrored gradation
+                    if (settings.UseMirror && settings.MirrorAxis != MirrorAxis.None)
                     {
-                        var mirrorResult = Bake(settings, entry, true);
-                        if (mirrorResult != null && mirrorResult.Texture != null)
-                        {
-                            BlendTextures(bakeResult.Texture, mirrorResult.Texture, settings.MirrorBlend);
-                            Object.DestroyImmediate(mirrorResult.Texture);
-                        }
+                        BlendMirrorInto(bakeResult, settings, entry, ctx);
+                    }
+
+                    // エッジパディングはミラー合成が終わった最終ピクセルに対してかける。
+                    // (合成前にかけると、膨張済みピクセル同士が Max/Min されて
+                    //  UV アイランド外周の色が合成結果と食い違う)
+                    ApplyEdgePadding(bakeResult, settings.EdgePaddingPixels);
+
+                    results.Add(bakeResult);
+                }
+            }
+
+            return results;
+        }
+
+        /// <summary>
+        /// ミラーベイクを実行し、メインの結果へ Max/Min 合成する。
+        /// </summary>
+        private void BlendMirrorInto(BakeResult bakeResult, GradationSettings settings, MeshEntry entry, BakeContext ctx)
+        {
+            // For split results
+            if (bakeResult.SubMeshResults != null && bakeResult.SubMeshResults.Count > 0)
+            {
+                var mirrorResult = Bake(settings, entry, ctx, true);
+                if (mirrorResult?.SubMeshResults == null) return;
+
+                for (int i = 0; i < bakeResult.SubMeshResults.Count && i < mirrorResult.SubMeshResults.Count; i++)
+                {
+                    var mainTex = bakeResult.SubMeshResults[i].Texture;
+                    // Note: Assuming submesh order and count is identical
+                    var mirrorTex = mirrorResult.SubMeshResults[i].Texture;
+                    if (mainTex != null && mirrorTex != null)
+                    {
+                        BlendTextures(mainTex, mirrorTex, settings.MirrorBlend);
                     }
                 }
-                
-                results.Add(bakeResult);
+
+                // Cleanup mirror textures immediately as they are blended in
+                foreach (var res in mirrorResult.SubMeshResults)
+                {
+                    if (res.Texture != null) Object.DestroyImmediate(res.Texture);
+                }
             }
-            
-            return results;
+            // For single result
+            else if (bakeResult.Texture != null)
+            {
+                var mirrorResult = Bake(settings, entry, ctx, true);
+                if (mirrorResult != null && mirrorResult.Texture != null)
+                {
+                    BlendTextures(bakeResult.Texture, mirrorResult.Texture, settings.MirrorBlend);
+                    Object.DestroyImmediate(mirrorResult.Texture);
+                }
+            }
+        }
+
+        private static void ApplyEdgePadding(BakeResult result, int paddingPixels)
+        {
+            if (paddingPixels <= 0 || result == null) return;
+
+            if (result.SubMeshResults != null && result.SubMeshResults.Count > 0)
+            {
+                foreach (var subRes in result.SubMeshResults)
+                {
+                    if (subRes.Texture != null) EdgePadding.Apply(subRes.Texture, paddingPixels);
+                }
+            }
+            else if (result.Texture != null)
+            {
+                EdgePadding.Apply(result.Texture, paddingPixels);
+            }
         }
 
         /// <summary>
@@ -83,15 +150,41 @@ namespace GradationBaker.Execute
         /// </summary>
         public BakeResult Bake(GradationSettings settings, MeshEntry entry, bool useMirror = false)
         {
-            Renderer renderer = entry.ActiveRenderer;
-            FileLogger.Log($"[GradationBaker] Starting Bake for {renderer.name} (mirror={useMirror}) split={entry.SplitByMaterial}...");
-            
+            using (var ctx = BakeContext.Create(settings))
+            {
+                if (!ctx.IsValid)
+                {
+                    return new BakeResult
+                    {
+                        RendererName = entry.SourceRenderer != null ? entry.SourceRenderer.name : "Unknown",
+                        SourceRenderer = entry.SourceRenderer,
+                        SubMeshResults = new List<SubMeshResult>()
+                    };
+                }
+
+                BakeResult result = Bake(settings, entry, ctx, useMirror);
+                ApplyEdgePadding(result, settings.EdgePaddingPixels);
+                return result;
+            }
+        }
+
+        private BakeResult Bake(GradationSettings settings, MeshEntry entry, BakeContext ctx, bool useMirror)
+        {
             BakeResult result = new BakeResult
             {
                 RendererName = entry.SourceRenderer != null ? entry.SourceRenderer.name : "Unknown",
                 SourceRenderer = entry.SourceRenderer,
                 SubMeshResults = new List<SubMeshResult>()
             };
+
+            Renderer renderer = entry.ActiveRenderer;
+            if (renderer == null)
+            {
+                FileLogger.LogError("[GradationBaker] Renderer not found.");
+                return result;
+            }
+
+            FileLogger.Log($"[GradationBaker] Starting Bake for {renderer.name} (mirror={useMirror}) split={entry.SplitByMaterial}...");
 
             Mesh mesh = GetMesh(renderer);
             if (mesh == null)
@@ -102,23 +195,12 @@ namespace GradationBaker.Execute
 
             MeshReadWriteEnabler.EnsureReadWriteEnabled(mesh);
 
-            Shader shader = Shader.Find(ShaderPath);
-            if (shader == null)
-            {
-                // null を返すと呼び出し側 (BakeAll / Window) で NRE になるため空の結果を返す
-                FileLogger.LogError($"[GradationBaker] Shader not found at {ShaderPath}.");
-                return result;
-            }
-            Material mat = new Material(shader);
-
-            // Generate LUT
-            Texture2D lut = CreateGradientLUT(settings.Gradient);
-            mat.SetTexture("_MainTex", lut);
+            Material mat = ctx.Material;
 
             // Get box parameters (mirrored if requested)
             Vector3 boxCenter = settings.BoxCenter;
             Quaternion boxRotation = settings.BoxRotation;
-            
+
             if (useMirror)
             {
                 (boxCenter, boxRotation) = settings.GetMirroredBox(renderer.transform);
@@ -126,8 +208,8 @@ namespace GradationBaker.Execute
 
             // Calculate world-to-box transformation matrix
             Matrix4x4 boxMatrix = Matrix4x4.TRS(
-                boxCenter, 
-                boxRotation, 
+                boxCenter,
+                boxRotation,
                 settings.BoxScale
             );
             Matrix4x4 worldToBox = boxMatrix.inverse;
@@ -138,7 +220,7 @@ namespace GradationBaker.Execute
             mat.SetInt("_Shape", (int)settings.Shape);
             mat.SetInt("_DitherMode", (int)settings.DitherMode);
             mat.SetFloat("_DitherIntensity", settings.DitherIntensity);
-            
+
             // UV Channel (per-mesh)
             mat.SetInt("_UVChannel", entry.UVChannel);
 
@@ -156,13 +238,8 @@ namespace GradationBaker.Execute
             mat.SetInt("_UseVertexColorMask", entry.UseVertexColorMask ? 1 : 0);
             mat.SetInt("_InvertMask", entry.InvertMask ? 1 : 0);
 
-            // Setup RenderTexture
-            int res = settings.Resolution;
-            RenderTexture rt = RenderTexture.GetTemporary(res, res, 0, RenderTextureFormat.ARGB32);
-            RenderTexture.active = rt;
-            
             // Clear color logic
-            Color clearColor = Color.clear;
+            Color clearColor;
             switch (settings.BgColor)
             {
                 case BackgroundColor.White:
@@ -177,85 +254,77 @@ namespace GradationBaker.Execute
                     break;
             }
 
-            // Material and Submesh Handling
-            Material[] sharedMaterials = renderer.sharedMaterials;
+            // Setup RenderTexture
+            // 例外が出ても RenderTexture.active を元に戻さないと以降のエディタ描画が壊れるため
+            // 保存 → try/finally で復元する
+            int res = settings.Resolution;
+            RenderTexture rt = RenderTexture.GetTemporary(res, res, 0, RenderTextureFormat.ARGB32);
+            RenderTexture previousActive = RenderTexture.active;
 
-            if (entry.SplitByMaterial)
+            try
             {
-                for (int i = 0; i < mesh.subMeshCount; i++)
-                {
-                    if (!entry.IsMaterialSlotEnabled(i)) continue;
+                RenderTexture.active = rt;
 
-                    GL.Clear(true, true, clearColor);
+                // Material and Submesh Handling
+                Material[] sharedMaterials = renderer.sharedMaterials;
 
-                    if (mat.SetPass(0))
-                    {
-                        Graphics.DrawMeshNow(mesh, Matrix4x4.identity, i);
-                    }
-                    else
-                    {
-                        FileLogger.LogError($"[GradationBaker] SetPass failed for submesh {i}.");
-                    }
-                    
-                    Texture2D subTex = new Texture2D(res, res, TextureFormat.ARGB32, false);
-                    subTex.ReadPixels(new Rect(0, 0, res, res), 0, 0);
-                    subTex.Apply();
-                    
-                    string matName = (i < sharedMaterials.Length && sharedMaterials[i] != null) 
-                        ? sharedMaterials[i].name 
-                        : $"Submesh{i}";
-
-                    result.SubMeshResults.Add(new SubMeshResult
-                    {
-                        Texture = subTex,
-                        SubMeshIndex = i,
-                        MaterialName = matName
-                    });
-                }
-            }
-            else
-            {
-                // Draw all enabled submeshes into a single texture
-                GL.Clear(true, true, clearColor);
-                if (mat.SetPass(0))
+                if (entry.SplitByMaterial)
                 {
                     for (int i = 0; i < mesh.subMeshCount; i++)
                     {
                         if (!entry.IsMaterialSlotEnabled(i)) continue;
-                        Graphics.DrawMeshNow(mesh, Matrix4x4.identity, i);
+
+                        GL.Clear(true, true, clearColor);
+
+                        if (mat.SetPass(0))
+                        {
+                            Graphics.DrawMeshNow(mesh, Matrix4x4.identity, i);
+                        }
+                        else
+                        {
+                            FileLogger.LogError($"[GradationBaker] SetPass failed for submesh {i}.");
+                        }
+
+                        Texture2D subTex = new Texture2D(res, res, TextureFormat.ARGB32, false);
+                        subTex.ReadPixels(new Rect(0, 0, res, res), 0, 0);
+                        subTex.Apply();
+
+                        string matName = (i < sharedMaterials.Length && sharedMaterials[i] != null)
+                            ? sharedMaterials[i].name
+                            : $"Submesh{i}";
+
+                        result.SubMeshResults.Add(new SubMeshResult
+                        {
+                            Texture = subTex,
+                            SubMeshIndex = i,
+                            MaterialName = matName
+                        });
                     }
                 }
-
-                Texture2D mainTex = new Texture2D(res, res, TextureFormat.ARGB32, false);
-                mainTex.ReadPixels(new Rect(0, 0, res, res), 0, 0);
-                mainTex.Apply();
-
-                result.Texture = mainTex;
-            }
-
-            // Cleanup
-            RenderTexture.active = null;
-            RenderTexture.ReleaseTemporary(rt);
-            Object.DestroyImmediate(mat);
-            Object.DestroyImmediate(lut);
-
-            // Apply Edge Padding if enabled
-            if (settings.EdgePaddingPixels > 0)
-            {
-                if (result.SubMeshResults != null && result.SubMeshResults.Count > 0)
+                else
                 {
-                    foreach (var subRes in result.SubMeshResults)
+                    // Draw all enabled submeshes into a single texture
+                    GL.Clear(true, true, clearColor);
+                    if (mat.SetPass(0))
                     {
-                        if (subRes.Texture != null)
+                        for (int i = 0; i < mesh.subMeshCount; i++)
                         {
-                            EdgePadding.Apply(subRes.Texture, settings.EdgePaddingPixels);
+                            if (!entry.IsMaterialSlotEnabled(i)) continue;
+                            Graphics.DrawMeshNow(mesh, Matrix4x4.identity, i);
                         }
                     }
+
+                    Texture2D mainTex = new Texture2D(res, res, TextureFormat.ARGB32, false);
+                    mainTex.ReadPixels(new Rect(0, 0, res, res), 0, 0);
+                    mainTex.Apply();
+
+                    result.Texture = mainTex;
                 }
-                else if (result.Texture != null)
-                {
-                    EdgePadding.Apply(result.Texture, settings.EdgePaddingPixels);
-                }
+            }
+            finally
+            {
+                RenderTexture.active = previousActive;
+                RenderTexture.ReleaseTemporary(rt);
             }
 
             return result;
@@ -272,7 +341,8 @@ namespace GradationBaker.Execute
             Color32[] overlayPixels = overlayTex.GetPixels32();
             bool useMin = blendMode == MirrorBlendMode.Min;
 
-            for (int i = 0; i < basePixels.Length; i++)
+            int count = Mathf.Min(basePixels.Length, overlayPixels.Length);
+            for (int i = 0; i < count; i++)
             {
                 Color32 baseC = basePixels[i];
                 Color32 overC = overlayPixels[i];
@@ -312,19 +382,23 @@ namespace GradationBaker.Execute
             return null;
         }
 
-        private Texture2D CreateGradientLUT(Gradient gradient)
+        private static Texture2D CreateGradientLUT(Gradient gradient)
         {
-            int width = 256;
-            Texture2D tex = new Texture2D(width, 1, TextureFormat.ARGB32, false);
-            tex.wrapMode = TextureWrapMode.Clamp;
-            tex.filterMode = FilterMode.Bilinear;
-            
+            const int width = 256;
+            Texture2D tex = new Texture2D(width, 1, TextureFormat.ARGB32, false)
+            {
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+
+            // SetPixel を 256 回呼ぶより Color[] を一括転送する方が速い
+            var pixels = new Color[width];
             for (int i = 0; i < width; i++)
             {
-                float t = (float)i / (width - 1);
-                Color col = gradient.Evaluate(t);
-                tex.SetPixel(i, 0, col);
+                pixels[i] = gradient.Evaluate(i / (float)(width - 1));
             }
+            tex.SetPixels(pixels);
             tex.Apply();
             return tex;
         }
@@ -334,10 +408,10 @@ namespace GradationBaker.Execute
     {
         // Combined result (or main result if not split)
         public Texture2D Texture;
-        
+
         // Split results (if applicable)
         public List<SubMeshResult> SubMeshResults;
-        
+
         public string RendererName;
         public Renderer SourceRenderer;
     }
