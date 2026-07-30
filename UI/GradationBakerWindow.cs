@@ -465,7 +465,6 @@ namespace GradationBaker.UI
             _ditherModeDropdown.label = L("dither_mode");
             _ditherIntensitySlider.label = L("dither_intensity");
 
-            _rootElement.Q<Label>("section-preview-label").text = L("section_preview");
             _blendModeDropdown.label = L("blend_mode");
             _ndmfPreviewSuspendedLabel.text = L("ndmf_preview_suspended");
 

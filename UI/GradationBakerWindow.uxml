@@ -43,9 +43,11 @@
                 </ui:VisualElement>
             </ui:VisualElement>
 
-            <!-- グラデーション -->
+            <!-- グラデーション・プレビュー -->
             <ui:VisualElement class="dennoko-card">
-                <ui:Label name="section-gradient-label" text="GRADIENT" class="dennoko-section-title dennoko-card-header" />
+                <ui:Label name="section-gradient-label" text="GRADIENT &amp; PREVIEW" class="dennoko-section-title dennoko-card-header" />
+                <ui:DropdownField name="blend-mode-dropdown" label="Blend Mode" class="dennoko-field-row" />
+                <ui:Label name="ndmf-preview-suspended-label" text="NDMF suspended." class="dennoko-text-tertiary dennoko-help-text" />
                 <uie:GradientField name="gradient-field" label="Colors" class="dennoko-field-row" />
                 <ui:VisualElement class="dennoko-button-row">
                     <ui:Button name="save-gradient-button" text="Save" class="dennoko-button-secondary" />
@@ -115,13 +117,6 @@
 
                 <ui:DropdownField name="dither-mode-dropdown" label="Dithering" class="dennoko-field-row" />
                 <ui:Slider name="dither-intensity-slider" label="Dither Intensity" low-value="0.0" high-value="2.0" show-input-field="true" class="dennoko-field-row" />
-            </ui:VisualElement>
-
-            <!-- プレビュー -->
-            <ui:VisualElement class="dennoko-card">
-                <ui:Label name="section-preview-label" text="PREVIEW" class="dennoko-section-title dennoko-card-header" />
-                <ui:DropdownField name="blend-mode-dropdown" label="Blend Mode" class="dennoko-field-row" />
-                <ui:Label name="ndmf-preview-suspended-label" text="NDMF suspended." class="dennoko-text-tertiary dennoko-help-text" />
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:ScrollView>

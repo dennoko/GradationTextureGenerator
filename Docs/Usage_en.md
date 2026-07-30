@@ -73,7 +73,7 @@ Enable the toggle in the "Mirror" section to access the following settings:
 
 ### Preview
 
-Use the "Blend Mode" dropdown in the "Preview" section to switch how the gradient overlay is composited in the Scene View.
+Use the "Blend Mode" dropdown in the "Gradient & Preview" section to switch how the gradient overlay is composited in the Scene View.
 
 > **Note**: The preview overlay is simplified. The generated texture colors correspond to an opacity of 1 (fully opaque).
 
