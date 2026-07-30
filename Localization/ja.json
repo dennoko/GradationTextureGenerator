@@ -50,6 +50,7 @@
     "invert_mask": "マスク反転",
     "split_by_material": "マテリアルごとに分割",
     "material_slots": "マテリアル",
+    "none": "(なし)",
     "success_title": "成功",
     "success_message": "グラデーションテクスチャを保存しました:\n{0}",
     "error_title": "エラー",

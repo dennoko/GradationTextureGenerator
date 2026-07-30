@@ -122,14 +122,24 @@
     color: var(--dennoko-text-primary);
 }
 
-/* Toggle ボタン型のアクティブ状態用 (ON/OFF 切り替えボタン等) */
+/* Toggle ボタン型のアクティブ状態用 (ON/OFF 切り替えボタン等)
+   サーフェス間の明度差だけでは選択中がひと目で分からないため、枠線を info の青
+   (--dennoko-semantic-info) にして「選択中」を明示する。
+   :hover / :active でも青枠を維持する (維持しないと汎用の .unity-button:active が
+   accent の白枠で上書きしてしまう)。 */
 .dennoko-root .unity-button.dennoko-button-active {
     background-color: var(--dennoko-surface-2);
+    border-color: var(--dennoko-semantic-info);
+    border-width: 1px;
     color: var(--dennoko-text-primary);
     -unity-font-style: bold;
 }
 .dennoko-root .unity-button.dennoko-button-active:hover {
     background-color: var(--dennoko-outline);
+    border-color: var(--dennoko-semantic-info);
+}
+.dennoko-root .unity-button.dennoko-button-active:active {
+    border-color: var(--dennoko-semantic-info);
 }
 
 /* 小型ボタン (Reset / × 等の行内ボタン) */
@@ -321,6 +331,39 @@
 
 .dennoko-root .unity-base-slider__dragger:hover {
     background-color: var(--dennoko-text-primary);
+}
+
+/* MinMaxSlider (範囲スライダー)
+   ⚠ スキンの範囲バーは 9-slice 画像のため、引き伸ばすと両端の色が
+   間延びして見える。画像を破棄してフラットな塗りに置き換える。 */
+.dennoko-root .unity-min-max-slider .unity-base-field__input,
+.dennoko-root .unity-min-max-slider__input {
+    height: 28px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+}
+
+.dennoko-root .unity-min-max-slider__tracker {
+    background-color: var(--dennoko-surface-2);
+    border-color: var(--dennoko-outline);
+    border-width: 1px;
+    border-radius: 2px;
+}
+
+.dennoko-root .unity-min-max-slider__dragger {
+    background-image: none;
+    background-color: var(--dennoko-text-secondary);
+    border-width: 0;
+    border-radius: 2px;
+}
+
+/* 両端のつまみは範囲部分より明るくして掴める位置を示す */
+.dennoko-root .unity-min-max-slider__min-thumb,
+.dennoko-root .unity-min-max-slider__max-thumb {
+    background-image: none;
+    background-color: var(--dennoko-text-primary);
+    border-width: 0;
+    border-radius: 2px;
 }
 
 /* ─── ⑦ スクロールバー ───────────────────────────────────── */

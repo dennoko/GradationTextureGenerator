@@ -82,34 +82,6 @@ namespace GradationBaker.UI
 
         public enum StatusType { Info, Success, Error }
 
-        // 端末にインストールされたメイリオを動的参照する(アセット同梱を避けるため)。
-        // UI Toolkit のテキストは TextCore で描画されるため、レガシー Font(CreateDynamicFontFromOSFont)
-        // ではグリフ生成に失敗して文字が表示されない。OS フォントから直接 SDF FontAsset を生成すること。
-        // 未搭載環境(Mac/Linux 等)では null のままエディタ標準フォントにフォールバックする。
-        private const string UI_FONT_FAMILY = "Meiryo";
-        private static UnityEngine.TextCore.Text.FontAsset _uiFontAsset;
-        private static bool _uiFontSearched;
-
-        private static UnityEngine.TextCore.Text.FontAsset GetUIFontAsset()
-        {
-            if (_uiFontSearched) return _uiFontAsset;
-            _uiFontSearched = true;
-
-            try
-            {
-                _uiFontAsset = UnityEngine.TextCore.Text.FontAsset.CreateFontAsset(UI_FONT_FAMILY, "Regular");
-                if (_uiFontAsset != null)
-                {
-                    _uiFontAsset.hideFlags = HideFlags.HideAndDontSave;
-                }
-            }
-            catch
-            {
-                _uiFontAsset = null;
-            }
-            return _uiFontAsset;
-        }
-
         [MenuItem("dennokoworks/Gradation Baker")]
         public static void ShowWindow()
         {
@@ -153,12 +125,9 @@ namespace GradationBaker.UI
             // 背景色や flex-grow は .dennoko-root として USS 側で定義される
             _rootElement.AddToClassList("dennoko-root");
 
-            // OS のメイリオが使えればウィンドウ全体のフォントに設定(全テキスト要素に継承される)
-            var uiFontAsset = GetUIFontAsset();
-            if (uiFontAsset != null)
-            {
-                _rootElement.style.unityFontDefinition = FontDefinition.FromSDFFont(uiFontAsset);
-            }
+            // OS のメイリオをウィンドウ全体のフォントに設定(全テキスト要素に継承される)。
+            // 生成・保護・キャッシュ消失からの復帰はすべて DennokoUIFont が受け持つ。
+            DennokoUIFont.Apply(_rootElement);
 
             // Load USS
             string ussPath = AssetDatabase.GUIDToAssetPath(USS_GUID);
@@ -838,7 +807,11 @@ namespace GradationBaker.UI
                         for (int mi = 0; mi < mats.Length; mi++)
                         {
                             int slotIndex = mi;
-                            string matName = (mats[mi] != null) ? mats[mi].name : $"Slot {mi}";
+                            // 同じマテリアルや同名マテリアルが複数スロットに入っていると
+                            // 名前だけでは行を区別できないため、常にスロット番号を前置する。
+                            string matName = (mats[mi] != null)
+                                ? $"[{mi}] {mats[mi].name}"
+                                : $"[{mi}] {L("none")}";
                             var toggleRow = new VisualElement();
                             toggleRow.AddToClassList("dennoko-horizontal");
                             toggleRow.AddToClassList("dennoko-field-row");
@@ -1095,12 +1068,31 @@ namespace GradationBaker.UI
 
                 if (result.SubMeshResults != null && result.SubMeshResults.Count > 0)
                 {
+                    // 別々のマテリアルが同じ名前を持つ場合、ファイル名が衝突して
+                    // 連番 (" 1") に落ちるため、どちらがどのスロットの出力か判別できなくなる。
+                    // 衝突するときに限りスロット番号を付けて一意にする。
+                    // (衝突しない一般ケースの名前は従来どおり変えない)
+                    var nameCounts = new Dictionary<string, int>();
                     foreach (var subRes in result.SubMeshResults)
                     {
                         if (subRes.Texture == null) continue;
 
-                        string safeMatName = string.Join("_", subRes.MaterialName.Split(Path.GetInvalidFileNameChars()));
-                        string baseName = $"{result.RendererName}_{safeMatName}";
+                        string name = SanitizeFileName(subRes.MaterialName);
+                        nameCounts.TryGetValue(name, out int count);
+                        nameCounts[name] = count + 1;
+                    }
+
+                    foreach (var subRes in result.SubMeshResults)
+                    {
+                        if (subRes.Texture == null) continue;
+
+                        string safeMatName = SanitizeFileName(subRes.MaterialName);
+                        if (nameCounts[safeMatName] > 1)
+                        {
+                            safeMatName = $"{safeMatName}_{subRes.SubMeshIndex}";
+                        }
+
+                        string baseName = $"{SanitizeFileName(result.RendererName)}_{safeMatName}";
 
                         string fileName = OutputPathResolver.GenerateUniqueFilename(fullDirPath, baseName);
                         string fullPath = Path.Combine(fullDirPath, fileName).Replace('\\', '/');
@@ -1114,7 +1106,7 @@ namespace GradationBaker.UI
                 }
                 else if (result.Texture != null)
                 {
-                    string fileName = OutputPathResolver.GenerateUniqueFilename(fullDirPath, result.RendererName);
+                    string fileName = OutputPathResolver.GenerateUniqueFilename(fullDirPath, SanitizeFileName(result.RendererName));
                     string fullPath = Path.Combine(fullDirPath, fileName).Replace('\\', '/');
 
                     SaveTexture(result.Texture, fullPath);
@@ -1364,6 +1356,15 @@ namespace GradationBaker.UI
 
         private string L(string key) => LocalizationManager.Get(key);
         private string L(string key, params object[] args) => LocalizationManager.Get(key, args);
+
+        /// <summary>
+        /// GameObject 名やマテリアル名はファイル名に使えない文字を含みうるため置換する。
+        /// </summary>
+        private static string SanitizeFileName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "Unnamed";
+            return string.Join("_", name.Split(Path.GetInvalidFileNameChars()));
+        }
 
         private void SaveTexture(Texture2D tex, string path)
         {

@@ -50,6 +50,7 @@
     "invert_mask": "Invert Mask",
     "split_by_material": "Split by Material",
     "material_slots": "Materials",
+    "none": "(None)",
     "status_idle": "Idle...",
     "status_bake_success": "Success: Saved {0} textures",
     "status_bake_error": "Error: Failed to save textures",

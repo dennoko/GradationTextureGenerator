@@ -185,7 +185,7 @@ namespace GradationBaker
         /// <summary>
         /// 比較用に正規化する。BOM / 先頭 v / プレリリース・ビルドメタデータを除去し、
         /// 2 桁以下（"3", "3.0"）は 3 桁（"3.0.0"）へゼロ埋めする。
-        /// ゼロ埋めしないと Version 型で Build=-1 となり "3.0" &lt; "3.0.0" の誤判定が出る。
+        /// ゼロ埋めしないと Version 型で Build=-1 となり "3.0" < "3.0.0" の誤判定が出る。
         /// </summary>
         private static string Normalize(string v)
         {
