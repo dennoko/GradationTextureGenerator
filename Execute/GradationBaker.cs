@@ -99,15 +99,22 @@ namespace GradationBaker.Execute
                 var mirrorResult = Bake(settings, entry, ctx, true);
                 if (mirrorResult?.SubMeshResults == null) return;
 
-                for (int i = 0; i < bakeResult.SubMeshResults.Count && i < mirrorResult.SubMeshResults.Count; i++)
+                // SubMeshIndex (マテリアルグループの代表サブメッシュ) で対応付ける。
+                // リスト順で対応付けると、グループ化の結果が両者でずれた場合に
+                // 別マテリアルのテクスチャ同士を合成してしまう。
+                var mirrorByIndex = new Dictionary<int, Texture2D>();
+                foreach (var res in mirrorResult.SubMeshResults)
                 {
-                    var mainTex = bakeResult.SubMeshResults[i].Texture;
-                    // Note: Assuming submesh order and count is identical
-                    var mirrorTex = mirrorResult.SubMeshResults[i].Texture;
-                    if (mainTex != null && mirrorTex != null)
-                    {
-                        BlendTextures(mainTex, mirrorTex, settings.MirrorBlend);
-                    }
+                    mirrorByIndex[res.SubMeshIndex] = res.Texture;
+                }
+
+                foreach (var mainRes in bakeResult.SubMeshResults)
+                {
+                    if (mainRes.Texture == null) continue;
+                    if (!mirrorByIndex.TryGetValue(mainRes.SubMeshIndex, out Texture2D mirrorTex)) continue;
+                    if (mirrorTex == null) continue;
+
+                    BlendTextures(mainRes.Texture, mirrorTex, settings.MirrorBlend);
                 }
 
                 // Cleanup mirror textures immediately as they are blended in
@@ -270,34 +277,34 @@ namespace GradationBaker.Execute
 
                 if (entry.SplitByMaterial)
                 {
-                    for (int i = 0; i < mesh.subMeshCount; i++)
+                    // 同じマテリアルが複数スロットに割り当てられている場合、
+                    // そのマテリアルが参照できるテクスチャは 1 枚だけなので
+                    // サブメッシュ単位ではなくマテリアル単位でまとめて 1 枚に焼く。
+                    foreach (var group in BuildMaterialGroups(mesh, sharedMaterials, entry))
                     {
-                        if (!entry.IsMaterialSlotEnabled(i)) continue;
-
                         GL.Clear(true, true, clearColor);
 
                         if (mat.SetPass(0))
                         {
-                            Graphics.DrawMeshNow(mesh, Matrix4x4.identity, i);
+                            foreach (int subMeshIndex in group.SubMeshIndices)
+                            {
+                                Graphics.DrawMeshNow(mesh, Matrix4x4.identity, subMeshIndex);
+                            }
                         }
                         else
                         {
-                            FileLogger.LogError($"[GradationBaker] SetPass failed for submesh {i}.");
+                            FileLogger.LogError($"[GradationBaker] SetPass failed for material '{group.MaterialName}'.");
                         }
 
                         Texture2D subTex = new Texture2D(res, res, TextureFormat.ARGB32, false);
                         subTex.ReadPixels(new Rect(0, 0, res, res), 0, 0);
                         subTex.Apply();
 
-                        string matName = (i < sharedMaterials.Length && sharedMaterials[i] != null)
-                            ? sharedMaterials[i].name
-                            : $"Submesh{i}";
-
                         result.SubMeshResults.Add(new SubMeshResult
                         {
                             Texture = subTex,
-                            SubMeshIndex = i,
-                            MaterialName = matName
+                            SubMeshIndex = group.SubMeshIndices[0],
+                            MaterialName = group.MaterialName
                         });
                     }
                 }
@@ -328,6 +335,67 @@ namespace GradationBaker.Execute
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// 同一マテリアルを共有するサブメッシュの集合。1 グループ = 出力テクスチャ 1 枚。
+        /// </summary>
+        private class MaterialGroup
+        {
+            public string MaterialName;
+            public List<int> SubMeshIndices = new List<int>();
+        }
+
+        /// <summary>
+        /// サブメッシュをマテリアル単位でグループ化する。
+        ///
+        /// Unity のマテリアルは 1 アセットにつきテクスチャ 1 枚しか参照できないため、
+        /// 同じマテリアルが複数スロットに割り当てられている場合にサブメッシュ毎へ
+        /// 分割して出力すると、どちらを割り当てても他方の UV アイランドが
+        /// 背景色のまま残ってしまう。それを避けるためにここでまとめる。
+        ///
+        /// マテリアル未設定 (スロット数がサブメッシュ数より少ない場合を含む) の
+        /// サブメッシュはまとめようがないので単独グループとして扱う。
+        /// スロットの有効/無効はサブメッシュ単位で適用され、グループ内の全スロットが
+        /// 無効ならそのマテリアルのテクスチャ自体が出力されない。
+        /// </summary>
+        private static List<MaterialGroup> BuildMaterialGroups(Mesh mesh, Material[] sharedMaterials, MeshEntry entry)
+        {
+            var groups = new List<MaterialGroup>();
+            var groupByMaterial = new Dictionary<Material, MaterialGroup>();
+
+            for (int i = 0; i < mesh.subMeshCount; i++)
+            {
+                if (!entry.IsMaterialSlotEnabled(i)) continue;
+
+                Material material = (i < sharedMaterials.Length) ? sharedMaterials[i] : null;
+
+                if (material == null)
+                {
+                    groups.Add(new MaterialGroup
+                    {
+                        MaterialName = $"Submesh{i}",
+                        SubMeshIndices = { i }
+                    });
+                    continue;
+                }
+
+                if (groupByMaterial.TryGetValue(material, out MaterialGroup existing))
+                {
+                    existing.SubMeshIndices.Add(i);
+                    continue;
+                }
+
+                var group = new MaterialGroup
+                {
+                    MaterialName = material.name,
+                    SubMeshIndices = { i }
+                };
+                groupByMaterial.Add(material, group);
+                groups.Add(group);
+            }
+
+            return groups;
         }
 
         /// <summary>
